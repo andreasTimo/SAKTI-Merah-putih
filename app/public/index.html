@@ -3,85 +3,145 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SAKTI Merah Putih — Fingerprint</title>
+    <title>SAKTI Merah Putih — Fingerprint 1:1</title>
     <style>
-      :root { --red: #c8102e; --ink: #1a1a1a; --paper: #fafafa; }
+      :root { --red: #c8102e; --ink: #1a1a1a; --paper: #fafafa; --ok: #1aaa55; }
       * { box-sizing: border-box; }
       body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
-      header { background: var(--red); color: #fff; padding: 18px 24px; }
-      header h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
-      main { max-width: 640px; margin: 32px auto; padding: 0 24px; }
-      .card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-      button { background: var(--red); color: #fff; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 15px; cursor: pointer; }
+      header { background: var(--red); color: #fff; padding: 16px 24px; }
+      header h1 { margin: 0; font-size: 17px; letter-spacing: .3px; }
+      main { max-width: 720px; margin: 24px auto; padding: 0 20px; display: grid; gap: 18px; }
+      .card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+      .card h2 { margin: 0 0 12px; font-size: 15px; }
+      label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; }
+      input { padding: 9px 11px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; width: 100%; }
+      .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+      .row > div { flex: 1; min-width: 120px; }
+      button { background: var(--red); color: #fff; border: 0; border-radius: 8px; padding: 11px 18px; font-size: 14px; cursor: pointer; white-space: nowrap; }
       button:disabled { opacity: .5; cursor: default; }
-      pre { background: #111; color: #7CFC7C; padding: 14px; border-radius: 8px; overflow: auto; font-size: 12px; }
-      #print { image-rendering: pixelated; width: 136px; height: 236px; border: 1px solid #ddd; background: #f0f0f0; }
-      .row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+      pre { background: #111; color: #7CFC7C; padding: 12px; border-radius: 8px; overflow: auto; font-size: 12px; margin: 12px 0 0; }
+      canvas { image-rendering: pixelated; width: 102px; height: 177px; border: 1px solid #ddd; background: #f0f0f0; }
       .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #bbb; margin-right: 6px; }
-      .dot.on { background: #1aaa55; } .dot.off { background: #c8102e; }
+      .dot.on { background: var(--ok); } .dot.off { background: var(--red); }
+      .verdict { font-size: 20px; font-weight: 700; margin-top: 10px; }
+      .verdict.match { color: var(--ok); } .verdict.nomatch { color: var(--red); }
+      small { color: #777; }
     </style>
   </head>
   <body>
-    <header><h1>SAKTI Merah Putih — Registrasi Sidik Jari</h1></header>
+    <header><h1>SAKTI Merah Putih — Verifikasi Sidik Jari 1:1</h1></header>
     <main>
       <div class="card">
-        <p><span id="dot" class="dot"></span><span id="status">Menghubungkan ke agent…</span></p>
+        <p style="margin:0">
+          <span id="dotAgent" class="dot"></span><span id="agentStatus">Agent…</span>
+          &nbsp;&nbsp;<span id="dotMatcher" class="dot"></span><span id="matcherStatus">Matcher…</span>
+        </p>
+        <small>Cache in-memory: data enroll hilang saat matcher/app dimatikan.</small>
+      </div>
+
+      <div class="card">
+        <h2>1. Enroll (rekam beberapa kali — "slide")</h2>
         <div class="row">
-          <div>
-            <button id="scan" disabled>Rekam Sidik Jari</button>
-            <p style="color:#777;font-size:13px">Tempelkan jari pada sensor CS9711, lalu klik.</p>
-          </div>
-          <canvas id="print" width="68" height="118"></canvas>
+          <div><label>Member ID</label><input id="enrollId" placeholder="mis. anggota-001" /></div>
+          <div style="max-width:110px"><label>Jumlah</label><input id="enrollN" type="number" value="5" min="1" max="12" /></div>
+          <button id="enrollBtn" disabled>Mulai Enroll</button>
+          <canvas id="preview" width="68" height="118"></canvas>
         </div>
-        <pre id="out">–</pre>
+        <pre id="enrollOut">–</pre>
+      </div>
+
+      <div class="card">
+        <h2>2. Verifikasi 1:1</h2>
+        <div class="row">
+          <div><label>Member ID</label><input id="verifyId" placeholder="mis. anggota-001" /></div>
+          <button id="verifyBtn" disabled>Verifikasi</button>
+        </div>
+        <div id="verdict" class="verdict"></div>
+        <pre id="verifyOut">–</pre>
       </div>
     </main>
+
     <script>
       const $ = (id) => document.getElementById(id);
-      async function health() {
-        try {
-          const r = await fetch('/api/health').then((r) => r.json());
-          const present = r.devicePresent;
-          $('dot').className = 'dot ' + (present ? 'on' : 'off');
-          $('status').textContent = present
-            ? 'Agent OK · perangkat terdeteksi (' + (r.devices?.[0]?.label || '') + ')'
-            : 'Agent OK · perangkat CS9711 belum terpasang';
-          $('scan').disabled = !present;
-        } catch (e) {
-          $('dot').className = 'dot off';
-          $('status').textContent = 'Agent native belum jalan (npm run agent di PC petugas)';
-        }
-      }
+
       function draw(pgmB64) {
         const bytes = Uint8Array.from(atob(pgmB64), (c) => c.charCodeAt(0));
-        const nl = (n) => { let i = 0, c = 0; while (c < n) { if (bytes[i++] === 10) c++; } return i; };
-        const start = nl(3); // skip "P5\n68 118\n255\n"
-        const cv = $('print'), ctx = cv.getContext('2d'), img = ctx.createImageData(68, 118);
-        for (let i = 0; i < 68 * 118; i++) {
-          const v = bytes[start + i];
-          img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
-          img.data[i * 4 + 3] = 255;
+        let i = 0, n = 0;
+        while (n < 3) { if (bytes[i++] === 10) n++; } // skip "P5\n68 118\n255\n"
+        const cv = $('preview'), ctx = cv.getContext('2d'), img = ctx.createImageData(68, 118);
+        for (let p = 0; p < 68 * 118; p++) {
+          const v = bytes[i + p];
+          img.data[p * 4] = img.data[p * 4 + 1] = img.data[p * 4 + 2] = v;
+          img.data[p * 4 + 3] = 255;
         }
         ctx.putImageData(img, 0, 0);
       }
-      $('scan').onclick = async () => {
-        $('scan').disabled = true; $('out').textContent = 'Merekam… tempelkan jari pada sensor.';
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 25000); // never hang forever
+
+      async function captureOne() {
+        const r = await fetch('/api/capture', { method: 'POST' }).then((x) => x.json());
+        if (!r.ok && r.error) throw new Error(r.error);
+        if (r.pgmBase64) draw(r.pgmBase64);
+        return r.pgmBase64;
+      }
+
+      async function health() {
         try {
-          const r = await fetch('/api/capture', { method: 'POST', signal: ctrl.signal }).then((r) => r.json());
-          if (r.ok === false || r.error) throw new Error(r.error || 'capture gagal');
-          $('out').textContent = JSON.stringify({ ok: r.ok, initOk: r.initOk, stats: r.stats }, null, 2);
-          if (r.pgmBase64) draw(r.pgmBase64);
-        } catch (e) {
-          $('out').textContent = e.name === 'AbortError'
-            ? 'Timeout: sensor tidak mengirim data (cek jari / binding driver).'
-            : 'Gagal: ' + e.message;
-        } finally {
-          clearTimeout(timer);
-          $('scan').disabled = false;
-        }
+          const a = await fetch('/api/health').then((r) => r.json());
+          const present = a.devicePresent;
+          $('dotAgent').className = 'dot ' + (present ? 'on' : 'off');
+          $('agentStatus').textContent = present ? 'Sensor siap' : 'Sensor belum terpasang';
+        } catch { $('dotAgent').className = 'dot off'; $('agentStatus').textContent = 'Agent native mati'; }
+        try {
+          const m = await fetch('/api/matcher-health').then((r) => r.json());
+          $('dotMatcher').className = 'dot on';
+          $('matcherStatus').textContent = `Matcher OK · ${m.enrolledMembers} member / ${m.totalTemplates} template`;
+          $('enrollBtn').disabled = false; $('verifyBtn').disabled = false;
+        } catch { $('dotMatcher').className = 'dot off'; $('matcherStatus').textContent = 'Matcher mati'; }
+      }
+
+      $('enrollBtn').onclick = async () => {
+        const memberId = $('enrollId').value.trim();
+        const n = Math.max(1, Math.min(12, parseInt($('enrollN').value) || 5));
+        if (!memberId) { $('enrollOut').textContent = 'Isi Member ID dulu.'; return; }
+        $('enrollBtn').disabled = true;
+        const images = [];
+        try {
+          for (let i = 1; i <= n; i++) {
+            $('enrollOut').textContent = `Rekam ${i}/${n} — tempel jari, angkat, ubah posisi sedikit tiap kali…`;
+            images.push(await captureOne());
+          }
+          $('enrollOut').textContent = 'Menyimpan template…';
+          const r = await fetch('/api/enroll', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ memberId, images }),
+          }).then((x) => x.json());
+          $('enrollOut').textContent = JSON.stringify(r, null, 2);
+        } catch (e) { $('enrollOut').textContent = 'Gagal: ' + e.message; }
+        $('enrollBtn').disabled = false; health();
       };
+
+      $('verifyBtn').onclick = async () => {
+        const memberId = $('verifyId').value.trim();
+        if (!memberId) { $('verifyOut').textContent = 'Isi Member ID dulu.'; return; }
+        $('verifyBtn').disabled = true; $('verdict').textContent = ''; $('verdict').className = 'verdict';
+        try {
+          $('verifyOut').textContent = 'Tempel jari untuk verifikasi…';
+          const image = await captureOne();
+          const r = await fetch('/api/verify', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ memberId, image }),
+          }).then((x) => x.json());
+          $('verifyOut').textContent = JSON.stringify(r, null, 2);
+          if (r.ok) {
+            $('verdict').textContent = r.matched
+              ? `✓ COCOK (skor ${r.score.toFixed(1)} ≥ ${r.threshold})`
+              : `✗ TIDAK COCOK (skor ${r.score.toFixed(1)} < ${r.threshold})`;
+            $('verdict').className = 'verdict ' + (r.matched ? 'match' : 'nomatch');
+          }
+        } catch (e) { $('verifyOut').textContent = 'Gagal: ' + e.message; }
+        $('verifyBtn').disabled = false;
+      };
+
       health(); setInterval(health, 4000);
     </script>
   </body>

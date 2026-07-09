@@ -61,11 +61,35 @@ di-Docker.
 | `LIBUSB_TRANSFER_TIMED_OUT` | tak ada jari saat polling (normal) | tempel jari saat `npm run proof` |
 | `not found (VID 0x2541)` | device tak terdeteksi / lepas dari bus | cek kabel/port, cabut-colok |
 
-## Matching (fase berikutnya, di luar Task 1)
+## Matching — Task 2 (`matcher/`, SourceAFIS 1:1)
 
-Setelah dapat gambar 68×118: pakai **SourceAFIS** (port .NET/Java) atau **NBIS
-Bozorth3** untuk enroll + verify. Enrollment CS9711 ± 15 sentuhan. Citra parsial →
-utamakan verifikasi **1:1** setelah identitas dari e-KTP/kartu.
+Service Java SourceAFIS 3.18.1, storage **in-memory** (ephemeral). Endpoint
+`POST /enroll` (multi-template), `POST /verify` (1:1), `GET /health`.
+
+### DPI calibration (PENTING)
+
+SourceAFIS memakai DPI untuk menormalkan frekuensi ridge. Frame CS9711 kecil
+(68×118), jadi **DPI harus rendah** supaya SourceAFIS meng-upscale ke 500 DPI
+internalnya dan menemukan minutiae. Hasil uji pada satu capture asli:
+
+| SENSOR_DPI | self-match score |
+|---|---|
+| 500 (default awal — salah) | **0** (nol minutiae) |
+| 200 | 41.9 |
+| 180 | 69.5 |
+| **150 (default sekarang)** | **711.6** |
+| 120 | 1178 |
+
+Default = **150** (`SENSOR_DPI` env). DPI terlalu rendah berisiko memunculkan
+minutiae dari noise → naikkan FAR. Nilai final **wajib dikalibrasi di hardware**
+dengan pasangan same-finger/different-press dan different-finger.
+
+> Verifikasi yang sudah dilakukan (satu capture asli): print sama → match
+> (711.6 ≥ 40) ✓, gambar kosong → tolak (0) ✓, restart → cache kosong ✓.
+> Akurasi same-finger/different-press BELUM diuji (butuh device + banyak capture).
+
+Citra parsial → utamakan verifikasi **1:1** setelah identitas dari e-KTP/kartu,
+dan gunakan **multi-template** (enroll beberapa "slide") untuk menaikkan akurasi.
 
 ## Sumber
 

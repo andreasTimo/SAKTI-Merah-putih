@@ -12,6 +12,24 @@ services:
     environment:
       - PORT=8080
       - AGENT_URL=http://host.docker.internal:7373
+      - MATCHER_URL=http://matcher:8090
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - matcher
+    restart: unless-stopped
+
+  # SourceAFIS 1:1 verification service. Templates live IN MEMORY only —
+  # stopping this container erases all enrolled fingerprints (testing cache).
+  matcher:
+    build: ./matcher
+    container_name: sakti-matcher
+    ports:
+      - "8090:8090"
+    environment:
+      - MATCHER_PORT=8090
+      - MATCH_THRESHOLD=40
+      # CS9711 68x118 frames need a low DPI so SourceAFIS extracts minutiae
+      # (500 → 0 minutiae; ~150 works). Calibrate on hardware.
+      - SENSOR_DPI=150
     restart: unless-stopped

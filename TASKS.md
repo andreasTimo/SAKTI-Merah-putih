@@ -29,10 +29,31 @@
   `set_configuration` sebelum claim, short-poll read 300ms (deadline 10s), read 8000+**24**
   (bukan 8000+8000), deteksi timeout `LIBUSB_TRANSFER_TIMED_OUT` di-retry (bukan fatal).
 
-## ⬜ Task 2 — Matching & enrollment
-- [ ] Integrasi SourceAFIS/NBIS: `/enroll` (simpan template) & `/verify` (1:1)
-- [ ] Uji FAR/FRR pada citra 68×118
-- [ ] Enkripsi template saat disimpan
+## 🔨 Task 2 — Verifikasi 1:1 (SourceAFIS, cache in-memory)
+
+**Keputusan desain (brainstorming):** matcher = SourceAFIS (template minutiae =
+"vektor"); enroll = multi-template (5–8 capture/"slide"); storage = **in-memory
+ephemeral** (hilang saat app mati) untuk fase pengetesan — DB design menyusul.
+Embedding/Gemini ditolak untuk sekarang (lihat catatan Future).
+
+- [x] `matcher/` service Java SourceAFIS 3.18.1, `POST /enroll` + `POST /verify` (1:1), `GET /health`
+- [x] Storage in-memory (`ConcurrentHashMap`) — restart = data terhapus
+- [x] Multi-template: skor = max over template member, threshold 40 (env `MATCH_THRESHOLD`)
+- [x] Parser PGM (P5) → `FingerprintImage` dpi 500 → `FingerprintTemplate`
+- [x] Unit test (JUnit): parse PGM, roundtrip template, integrasi real-print (gated `FP_SAMPLE`)
+- [x] App: proxy `/api/enroll`, `/api/verify`; UI Enroll (multi-capture) + Verifikasi 1:1
+- [x] `docker-compose`: service `matcher` + app `depends_on`
+- [x] **Kalibrasi DPI**: CS9711 68×118 butuh `SENSOR_DPI=150` (500 → 0 minutiae). Default di-set 150.
+- [x] Smoke test (capture asli): same→match 711.6 ✓, blank→tolak 0 ✓, restart→cache kosong ✓
+- [ ] Verifikasi hardware same-finger/different-press + different-finger (FAR/FRR) — butuh device
+- [ ] 1:N identification (task lanjutan)
+- [ ] Enkripsi template + DB persisten (task lanjutan, saat DB design)
+
+**Future — embedding lokal (bukan sekarang):** upgrade ke fixed-length embedding
+(gaya DeepPrint) + pgvector untuk 1:N skala besar. Bukan Gemini (API teks, bukan
+image; general-vision tak diskriminatif untuk biometrik; cloud melanggar UU PDP).
+Rujukan: github.com/tim-rohwedder/fixed-length-fingerprint-extractors. Perlu
+kumpulkan dataset dari CS9711 + kemungkinan fine-tune.
 
 ## ⬜ Task 3 — e-KTP NFC reader
 - [ ] Bridge NFC (pola sama: agent native → localhost)
