@@ -48,6 +48,19 @@ Kenapa **bukan Docker** untuk capture: Docker Desktop di Win/macOS menjalankan V
 Linux; USB passthrough tak didukung. Maka agent harus native; hanya `app/` yang
 di-Docker.
 
+> **libusb itu lintas-platform**, bukan Mac-only. Paket `usb` (node-usb) mengemas
+> binary libusb prebuilt untuk Windows x64/arm64, macOS, dan Linux — **kode agent
+> & dependency-nya sama** di semua OS. Yang berbeda hanya izin akses driver.
+
+### Troubleshooting
+
+| Error | Arti | Solusi |
+|-------|------|--------|
+| `LIBUSB_ERROR_ACCESS` (Windows) | device belum di-bind WinUSB, atau dipegang Windows Biometric Service / app lain | `npm run setup` → Zadig bind WinUSB; bila perlu `Stop-Service WbioSrvc` |
+| `LIBUSB_ERROR_ACCESS` (Linux) | izin udev kurang | pasang udev rule (`npm run setup`), cabut-colok |
+| `LIBUSB_TRANSFER_TIMED_OUT` | tak ada jari saat polling (normal) | tempel jari saat `npm run proof` |
+| `not found (VID 0x2541)` | device tak terdeteksi / lepas dari bus | cek kabel/port, cabut-colok |
+
 ## Matching (fase berikutnya, di luar Task 1)
 
 Setelah dapat gambar 68×118: pakai **SourceAFIS** (port .NET/Java) atau **NBIS

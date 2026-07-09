@@ -68,6 +68,31 @@ const debug = (...a) => {
 // libusb reports "LIBUSB_TRANSFER_TIMED_OUT"; also match plain "timeout".
 const isTimeout = (e) => /tim(e|ed).?out/i.test(e && e.message);
 
+// Turn raw libusb errors into actionable, platform-aware messages.
+function enrichUsbError(e) {
+  const msg = (e && e.message) || String(e);
+  if (/ACCESS/i.test(msg)) {
+    if (process.platform === 'win32') {
+      return new Error(
+        'LIBUSB_ERROR_ACCESS: perangkat belum di-bind ke WinUSB (atau dipegang Windows ' +
+          'Biometric Service / app lain). Jalankan "npm run setup", bind CS9711 (2541:0236) ' +
+          'ke WinUSB via Zadig, lalu coba lagi.'
+      );
+    }
+    if (process.platform === 'linux') {
+      return new Error(
+        'LIBUSB_ERROR_ACCESS: izin udev belum ada. Jalankan "npm run setup" untuk memasang ' +
+          'udev rule, lalu cabut-colok perangkat.'
+      );
+    }
+    return new Error('LIBUSB_ERROR_ACCESS: perangkat sedang dipakai proses lain. Tutup app lain lalu coba lagi.');
+  }
+  if (/BUSY/i.test(msg)) {
+    return new Error(msg + ' — perangkat diklaim proses lain; tutup app lain atau cabut-colok.');
+  }
+  return e;
+}
+
 // Only one device session at a time. Overlapping open()/claim() on the same
 // physical device throws LIBUSB_ERROR_BUSY and can crash the native layer.
 let busy = false;
@@ -85,17 +110,21 @@ async function withInterface(fn) {
   const { dev, pid } = found;
   let iface;
   try {
-    dev.open();
-    await setConfiguration(dev, 1); // reference driver sets config before claim
-    iface = dev.interface(0);
-    if (typeof iface.isKernelDriverActive === 'function' && iface.isKernelDriverActive()) {
-      try {
-        iface.detachKernelDriver();
-      } catch (_) {
-        /* not fatal on Windows/macOS */
+    try {
+      dev.open();
+      await setConfiguration(dev, 1); // reference driver sets config before claim
+      iface = dev.interface(0);
+      if (typeof iface.isKernelDriverActive === 'function' && iface.isKernelDriverActive()) {
+        try {
+          iface.detachKernelDriver();
+        } catch (_) {
+          /* not fatal on Windows/macOS */
+        }
       }
+      iface.claim();
+    } catch (e) {
+      throw enrichUsbError(e); // e.g. LIBUSB_ERROR_ACCESS on unbound WinUSB
     }
-    iface.claim();
     return await fn({ dev, pid, iface });
   } finally {
     await releaseInterface(iface);
