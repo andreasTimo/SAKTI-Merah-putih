@@ -119,11 +119,21 @@ async function withInterface(fn) {
       dev.open();
       await setConfiguration(dev, 1); // reference driver sets config before claim
       iface = dev.interface(0);
-      if (typeof iface.isKernelDriverActive === 'function' && iface.isKernelDriverActive()) {
+      // libusb_kernel_driver_active() is LIBUSB_ERROR_NOT_SUPPORTED on the
+      // Windows (WinUSB) backend by design — Windows has no Linux-style
+      // kernel-driver-per-interface concept. Treat "unsupported" as "nothing
+      // to detach", not as a fatal error.
+      let kernelActive = false;
+      try {
+        kernelActive = typeof iface.isKernelDriverActive === 'function' && iface.isKernelDriverActive();
+      } catch (_) {
+        kernelActive = false;
+      }
+      if (kernelActive) {
         try {
           iface.detachKernelDriver();
         } catch (_) {
-          /* not fatal on Windows/macOS */
+          /* not fatal */
         }
       }
       iface.claim();
