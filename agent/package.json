@@ -1,0 +1,21 @@
+{
+  "name": "@sakti/fingerprint-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native CS9711 (ChipSailing) fingerprint capture bridge for SAKTI Merah Putih. Cross-platform via libusb (Windows + macOS + Linux).",
+  "main": "src/server.js",
+  "bin": {
+    "sakti-fp-doctor": "src/doctor.js"
+  },
+  "scripts": {
+    "doctor": "node src/doctor.js",
+    "proof": "node src/doctor.js --capture",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "usb": "^2.14.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

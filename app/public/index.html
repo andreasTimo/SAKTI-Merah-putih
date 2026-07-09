@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SAKTI Merah Putih — Fingerprint</title>
+    <style>
+      :root { --red: #c8102e; --ink: #1a1a1a; --paper: #fafafa; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
+      header { background: var(--red); color: #fff; padding: 18px 24px; }
+      header h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
+      main { max-width: 640px; margin: 32px auto; padding: 0 24px; }
+      .card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+      button { background: var(--red); color: #fff; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 15px; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: default; }
+      pre { background: #111; color: #7CFC7C; padding: 14px; border-radius: 8px; overflow: auto; font-size: 12px; }
+      #print { image-rendering: pixelated; width: 136px; height: 236px; border: 1px solid #ddd; background: #f0f0f0; }
+      .row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #bbb; margin-right: 6px; }
+      .dot.on { background: #1aaa55; } .dot.off { background: #c8102e; }
+    </style>
+  </head>
+  <body>
+    <header><h1>SAKTI Merah Putih — Registrasi Sidik Jari</h1></header>
+    <main>
+      <div class="card">
+        <p><span id="dot" class="dot"></span><span id="status">Menghubungkan ke agent…</span></p>
+        <div class="row">
+          <div>
+            <button id="scan" disabled>Rekam Sidik Jari</button>
+            <p style="color:#777;font-size:13px">Tempelkan jari pada sensor CS9711, lalu klik.</p>
+          </div>
+          <canvas id="print" width="68" height="118"></canvas>
+        </div>
+        <pre id="out">–</pre>
+      </div>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      async function health() {
+        try {
+          const r = await fetch('/api/health').then((r) => r.json());
+          const present = r.devicePresent;
+          $('dot').className = 'dot ' + (present ? 'on' : 'off');
+          $('status').textContent = present
+            ? 'Agent OK · perangkat terdeteksi (' + (r.devices?.[0]?.label || '') + ')'
+            : 'Agent OK · perangkat CS9711 belum terpasang';
+          $('scan').disabled = !present;
+        } catch (e) {
+          $('dot').className = 'dot off';
+          $('status').textContent = 'Agent native belum jalan (npm run agent di PC petugas)';
+        }
+      }
+      function draw(pgmB64) {
+        const bytes = Uint8Array.from(atob(pgmB64), (c) => c.charCodeAt(0));
+        const nl = (n) => { let i = 0, c = 0; while (c < n) { if (bytes[i++] === 10) c++; } return i; };
+        const start = nl(3); // skip "P5\n68 118\n255\n"
+        const cv = $('print'), ctx = cv.getContext('2d'), img = ctx.createImageData(68, 118);
+        for (let i = 0; i < 68 * 118; i++) {
+          const v = bytes[start + i];
+          img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+          img.data[i * 4 + 3] = 255;
+        }
+        ctx.putImageData(img, 0, 0);
+      }
+      $('scan').onclick = async () => {
+        $('scan').disabled = true; $('out').textContent = 'Merekam…';
+        try {
+          const r = await fetch('/api/capture', { method: 'POST' }).then((r) => r.json());
+          $('out').textContent = JSON.stringify({ ok: r.ok, initOk: r.initOk, stats: r.stats }, null, 2);
+          if (r.pgmBase64) draw(r.pgmBase64);
+        } catch (e) { $('out').textContent = 'Gagal: ' + e.message; }
+        $('scan').disabled = false;
+      };
+      health(); setInterval(health, 4000);
+    </script>
+  </body>
+</html>

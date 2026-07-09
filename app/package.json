@@ -1,0 +1,13 @@
+{
+  "name": "@sakti/app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SAKTI web app (Dockerized). Talks to the native fingerprint agent over localhost.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

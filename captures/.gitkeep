@@ -1,0 +1,2 @@
+# Captured fingerprint images (*.pgm) and proof-report.json land here.
+# This directory is git-ignored on purpose — biometric data must not be committed.
