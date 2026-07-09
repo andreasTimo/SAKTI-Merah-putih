@@ -96,6 +96,31 @@ async function main() {
   } catch (e) {
     fail(`claim failed: ${e.message}`);
     report.checks.claimed = false;
+    if (/ACCESS/i.test(e.message) && os.platform() === 'win32') {
+      section('Windows access diagnostics (live evidence)');
+      const info = require('./win-diagnose').diagnose();
+      report.winDiagnose = info;
+      if (info.wbioStatus === 'Running') {
+        fail(`Windows Biometric Service (WbioSrvc) is RUNNING — likely holding the device.`);
+        console.log(`  ${C.dim}Fix: Stop-Service WbioSrvc; Set-Service WbioSrvc -StartupType Disabled${C.reset}`);
+      } else if (info.wbioStatus) {
+        ok(`WbioSrvc status: ${info.wbioStatus} (not the cause)`);
+      } else {
+        warn('could not query WbioSrvc status (needs PowerShell on PATH)');
+      }
+      if (info.elevated === false) {
+        fail('This shell is NOT running as Administrator.');
+        console.log(`  ${C.dim}Fix: re-open PowerShell/Terminal "Run as administrator", then retry.${C.reset}`);
+      } else if (info.elevated === true) {
+        ok('shell is elevated (Administrator) — not the cause');
+      }
+      if (info.otherNodePids && info.otherNodePids.length > 0) {
+        fail(`Other node.exe processes running (PID: ${info.otherNodePids.join(', ')}) — may hold a stale handle.`);
+        console.log(`  ${C.dim}Fix: Stop-Process -Id <pid>, or reboot, then retry.${C.reset}`);
+      } else {
+        ok('no other node.exe process found holding the device');
+      }
+    }
     platformHint();
     return writeReport(report, 3);
   }

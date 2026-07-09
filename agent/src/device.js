@@ -69,14 +69,19 @@ const debug = (...a) => {
 const isTimeout = (e) => /tim(e|ed).?out/i.test(e && e.message);
 
 // Turn raw libusb errors into actionable, platform-aware messages.
+// NOTE: on Windows this fires even when Device Manager already shows the
+// driver as WinUSB — a bound driver does not guarantee an exclusive handle is
+// available, so the message must not assert "not bound" as the cause.
 function enrichUsbError(e) {
   const msg = (e && e.message) || String(e);
   if (/ACCESS/i.test(msg)) {
     if (process.platform === 'win32') {
       return new Error(
-        'LIBUSB_ERROR_ACCESS: perangkat belum di-bind ke WinUSB (atau dipegang Windows ' +
-          'Biometric Service / app lain). Jalankan "npm run setup", bind CS9711 (2541:0236) ' +
-          'ke WinUSB via Zadig, lalu coba lagi.'
+        'LIBUSB_ERROR_ACCESS: device tidak bisa dibuka meski driver mungkin sudah WinUSB. ' +
+          'Penyebab paling umum: (1) Windows Biometric Service (WbioSrvc) memegang device, ' +
+          '(2) proses lain (termasuk agent lama yang masih jalan) masih membuka handle-nya, ' +
+          '(3) shell tidak dijalankan sebagai Administrator. Jalankan "npm run doctor" — ' +
+          'ia akan mengecek status WbioSrvc dan elevasi secara otomatis.'
       );
     }
     if (process.platform === 'linux') {
