@@ -40,21 +40,21 @@
       </div>
 
       <div class="card">
-        <h2>1. Enroll (rekam beberapa kali — "slide")</h2>
+        <h2>1. Enroll — GESER jari (swipe)</h2>
         <div class="row">
           <div><label>Member ID</label><input id="enrollId" placeholder="mis. anggota-001" /></div>
-          <div style="max-width:110px"><label>Jumlah</label><input id="enrollN" type="number" value="5" min="1" max="12" /></div>
-          <button id="enrollBtn" disabled>Mulai Enroll</button>
+          <button id="enrollBtn" disabled>Mulai Enroll (geser jari)</button>
           <canvas id="preview" width="68" height="118"></canvas>
         </div>
+        <small>Tempel lalu <b>geser</b> jari perlahan di sensor selama ±4 detik — sistem merekam banyak frame berbeda-posisi.</small>
         <pre id="enrollOut">–</pre>
       </div>
 
       <div class="card">
-        <h2>2. Verifikasi 1:1</h2>
+        <h2>2. Verifikasi 1:1 — GESER jari</h2>
         <div class="row">
           <div><label>Member ID</label><input id="verifyId" placeholder="mis. anggota-001" /></div>
-          <button id="verifyBtn" disabled>Verifikasi</button>
+          <button id="verifyBtn" disabled>Verifikasi (geser jari)</button>
         </div>
         <div id="verdict" class="verdict"></div>
         <pre id="verifyOut">–</pre>
@@ -77,11 +77,13 @@
         ctx.putImageData(img, 0, 0);
       }
 
-      async function captureOne() {
-        const r = await fetch('/api/capture', { method: 'POST' }).then((x) => x.json());
-        if (!r.ok && r.error) throw new Error(r.error);
-        if (r.pgmBase64) draw(r.pgmBase64);
-        return r.pgmBase64;
+      // Swipe: one call captures a burst of distinct frames while the finger slides.
+      async function captureSwipe() {
+        const r = await fetch('/api/capture-burst', { method: 'POST' }).then((x) => x.json());
+        if (r.ok === false || r.error) throw new Error(r.error || 'burst gagal');
+        const frames = r.frames || [];
+        if (frames.length) draw(frames[frames.length - 1]);
+        return frames;
       }
 
       async function health() {
@@ -101,16 +103,16 @@
 
       $('enrollBtn').onclick = async () => {
         const memberId = $('enrollId').value.trim();
-        const n = Math.max(1, Math.min(12, parseInt($('enrollN').value) || 5));
         if (!memberId) { $('enrollOut').textContent = 'Isi Member ID dulu.'; return; }
         $('enrollBtn').disabled = true;
-        const images = [];
         try {
-          for (let i = 1; i <= n; i++) {
-            $('enrollOut').textContent = `Rekam ${i}/${n} — tempel jari, angkat, ubah posisi sedikit tiap kali…`;
-            images.push(await captureOne());
+          $('enrollOut').textContent = 'GESER jari perlahan di sensor (±4 detik)…';
+          const images = await captureSwipe();
+          if (images.length < 2) {
+            $('enrollOut').textContent = `Hanya ${images.length} frame terekam — geser lebih lambat & tekan lebih rata, ulangi.`;
+            $('enrollBtn').disabled = false; return;
           }
-          $('enrollOut').textContent = 'Menyimpan template…';
+          $('enrollOut').textContent = `Menyimpan ${images.length} template…`;
           const r = await fetch('/api/enroll', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ memberId, images }),
@@ -125,11 +127,12 @@
         if (!memberId) { $('verifyOut').textContent = 'Isi Member ID dulu.'; return; }
         $('verifyBtn').disabled = true; $('verdict').textContent = ''; $('verdict').className = 'verdict';
         try {
-          $('verifyOut').textContent = 'Tempel jari untuk verifikasi…';
-          const image = await captureOne();
+          $('verifyOut').textContent = 'GESER jari untuk verifikasi…';
+          const images = await captureSwipe();
+          if (images.length === 0) throw new Error('tidak ada frame — geser jari di sensor');
           const r = await fetch('/api/verify', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ memberId, image }),
+            body: JSON.stringify({ memberId, images }),
           }).then((x) => x.json());
           $('verifyOut').textContent = JSON.stringify(r, null, 2);
           if (r.ok) {

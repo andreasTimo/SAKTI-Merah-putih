@@ -98,7 +98,9 @@ public class Matcher {
         }
     }
 
-    // POST /verify { memberId, image: pgmBase64, threshold? }  -> 1:1 match (max over member's templates)
+    // POST /verify { memberId, image | images[], threshold? }  -> 1:1 match.
+    // Accepts a single image or a burst (swipe). Score = max over every probe
+    // frame against every stored template of the member.
     static void verify(HttpExchange ex) throws IOException {
         if (!"POST".equals(ex.getRequestMethod())) { send(ex, 405, err("POST only")); return; }
         try {
@@ -108,11 +110,15 @@ public class Matcher {
             List<FingerprintTemplate> candidates = STORE.get(memberId);
             if (candidates == null) { send(ex, 404, err("member not enrolled: " + memberId)); return; }
 
-            FingerprintTemplate probe = templateFrom(Base64.getDecoder().decode(body.get("image").getAsString()));
-            FingerprintMatcher matcher = new FingerprintMatcher(probe);
+            List<byte[]> probeImages = imagesFrom(body);
+            if (probeImages.isEmpty()) { send(ex, 400, err("image or non-empty images[] required")); return; }
+
             double best = 0.0;
-            for (FingerprintTemplate candidate : candidates) {
-                best = Math.max(best, matcher.match(candidate));
+            for (byte[] img : probeImages) {
+                FingerprintMatcher matcher = new FingerprintMatcher(templateFrom(img));
+                for (FingerprintTemplate candidate : candidates) {
+                    best = Math.max(best, matcher.match(candidate));
+                }
             }
             JsonObject o = new JsonObject();
             o.addProperty("ok", true);
@@ -120,11 +126,25 @@ public class Matcher {
             o.addProperty("score", best);
             o.addProperty("threshold", threshold);
             o.addProperty("matched", best >= threshold);
+            o.addProperty("probeFrames", probeImages.size());
             o.addProperty("comparedTemplates", candidates.size());
             send(ex, 200, o);
         } catch (Exception e) {
             send(ex, 500, err(e.getMessage()));
         }
+    }
+
+    // Accept either "image" (single base64 PGM) or "images":[...] (a swipe burst).
+    static List<byte[]> imagesFrom(JsonObject body) {
+        List<byte[]> out = new ArrayList<>();
+        if (body.has("images") && body.get("images").isJsonArray()) {
+            for (JsonElement el : body.getAsJsonArray("images")) {
+                out.add(Base64.getDecoder().decode(el.getAsString()));
+            }
+        } else if (body.has("image") && !body.get("image").isJsonNull()) {
+            out.add(Base64.getDecoder().decode(body.get("image").getAsString()));
+        }
+        return out;
     }
 
     /** PGM bytes -> SourceAFIS template. Shared by enroll and verify (and tests). */

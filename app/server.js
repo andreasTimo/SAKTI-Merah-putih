@@ -47,6 +47,7 @@ const server = http.createServer(async (req, res) => {
   // Capture bridge (native agent on the host)
   if (url === '/api/health') return forward(res, `${AGENT_URL}/health`, 'GET');
   if (url === '/api/capture' && method === 'POST') return forward(res, `${AGENT_URL}/capture`, 'POST');
+  if (url === '/api/capture-burst' && method === 'POST') return forward(res, `${AGENT_URL}/capture-burst`, 'POST');
 
   // Matching service
   if (url === '/api/matcher-health') return forward(res, `${MATCHER_URL}/health`, 'GET');

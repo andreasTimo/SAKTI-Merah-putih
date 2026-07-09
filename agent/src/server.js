@@ -6,7 +6,7 @@
 const http = require('http');
 const os = require('os');
 const device = require('./device');
-const { remap, toPGM, frameStats } = require('./image');
+const { remap, toPGM, frameStats, selectDistinctFrames } = require('./image');
 
 const PORT = Number(process.env.AGENT_PORT) || 7373;
 const HOST = process.env.AGENT_HOST || '127.0.0.1';
@@ -58,12 +58,34 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  return send(res, 404, { error: 'not found', routes: ['GET /health', 'POST /capture'] });
+  // Swipe/burst capture: collect frames while the finger slides, return only the
+  // distinct, finger-present views (filtered by std + inter-frame movement).
+  if (req.method === 'POST' && req.url === '/capture-burst') {
+    try {
+      const { raws } = await device.captureBurst({ durationMs: 4000, maxFrames: 24 });
+      const grays = raws.map(remap);
+      const distinct = selectDistinctFrames(grays, { minStd: 12, diffThreshold: 6 });
+      return send(res, 200, {
+        ok: true,
+        rawFrames: grays.length,
+        frames: distinct.map((g) => toPGM(g).toString('base64')),
+        stats: distinct.map(frameStats),
+        captured: distinct.length,
+      });
+    } catch (e) {
+      return send(res, 500, { ok: false, error: e.message });
+    }
+  }
+
+  return send(res, 404, {
+    error: 'not found',
+    routes: ['GET /health', 'POST /capture', 'POST /capture-burst'],
+  });
 });
 
 server.listen(PORT, HOST, () => {
   console.log(`[agent] SAKTI fingerprint agent listening on http://${HOST}:${PORT}`);
-  console.log('[agent] routes: GET /health, POST /capture');
+  console.log('[agent] routes: GET /health, POST /capture, POST /capture-burst');
 });
 
 // Crash resilience: a stray USB/JS error must log, not kill the agent.

@@ -37,4 +37,30 @@ function frameStats(gray) {
   return { mean: +mean.toFixed(2), std: +std.toFixed(2), pixels: gray.length };
 }
 
-module.exports = { remap, toPGM, frameStats };
+// Mean absolute pixel difference between two same-size grayscale frames.
+// Used to tell whether the finger actually moved between two burst frames.
+function meanAbsDiff(a, b) {
+  const n = Math.min(a.length, b.length);
+  if (n === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += Math.abs(a[i] - b[i]);
+  return sum / n;
+}
+
+// From a burst of raw grayscale frames, keep only the ones that (a) have real
+// ridge content (std >= minStd, i.e. a finger is present) and (b) differ enough
+// from the last kept frame (meanAbsDiff >= diffThreshold, i.e. the finger moved).
+// This turns a continuous swipe into a set of distinct, non-redundant views.
+function selectDistinctFrames(grays, { minStd = 12, diffThreshold = 6 } = {}) {
+  const kept = [];
+  let last = null;
+  for (const g of grays) {
+    if (frameStats(g).std < minStd) continue;
+    if (last && meanAbsDiff(g, last) < diffThreshold) continue;
+    kept.push(g);
+    last = g;
+  }
+  return kept;
+}
+
+module.exports = { remap, toPGM, frameStats, meanAbsDiff, selectDistinctFrames };
