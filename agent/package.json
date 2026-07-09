@@ -10,7 +10,8 @@
   "scripts": {
     "doctor": "node src/doctor.js",
     "proof": "node src/doctor.js --capture",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "usb": "^2.14.0"

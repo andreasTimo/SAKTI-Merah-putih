@@ -13,15 +13,21 @@
 - [x] App dalam bentuk Docker (`app/` + `docker-compose.yml`)
 
 **Kriteria PASS (dijalankan di hardware nyata):**
-1. **macOS:** `npm install` → `npm run doctor` ⇒ `PROOF: PASS`
-   (libusb load ✓, enumerate `0x2541:0x0236` ✓, claim interface 0 ✓).
-2. **Windows:** `npm run setup` → bind WinUSB (Zadig) → `npm run doctor` ⇒ `PROOF: PASS`.
+1. ✅ **macOS — TERVERIFIKASI** (Darwin 25.3, Apple Silicon, Node 26):
+   `npm run proof` ⇒ `PROOF: PASS` — INIT status match, frame 8000+24,
+   std-dev 49.65, `captures/capture-*.pgm` valid (min 12 / max 254). Tanpa crash.
+2. ⬜ **Windows:** `npm run setup` → bind WinUSB (Zadig) → `npm run proof` ⇒ `PROOF: PASS`.
 3. **Kedua OS:** `npm run proof` dengan jari di sensor ⇒ `captures/capture-*.pgm`
-   ter-generate, `std-dev` gambar > 5 (ada ridge sidik jari, bukan frame kosong).
+   ter-generate, `std-dev` > 5 (ada ridge, bukan frame kosong).
 4. Bukti diarsipkan: `captures/proof-report.json` per OS.
 
-> Status kode: siap uji. Verifikasi akhir butuh sensor CS9711 fisik pada tiap OS
-> (mesin dev ini tanpa device → doctor berhenti wajar di langkah "enumeration").
+### Bugfix log (dari uji hardware)
+- **Crash + status "Merekam…" nyangkut:** `withInterface` menutup device (release/close)
+  secara sinkron di `finally` sebelum transfer async selesai → native crash + request
+  menggantung. Fix: `await fn()` di dalam `try` + busy-lock. Ditutup dengan test regresi.
+- **`LIBUSB_TRANSFER_ERROR` / capture gagal:** protokol tak sesuai referensi. Fix:
+  `set_configuration` sebelum claim, short-poll read 300ms (deadline 10s), read 8000+**24**
+  (bukan 8000+8000), deteksi timeout `LIBUSB_TRANSFER_TIMED_OUT` di-retry (bukan fatal).
 
 ## ⬜ Task 2 — Matching & enrollment
 - [ ] Integrasi SourceAFIS/NBIS: `/enroll` (simpan template) & `/verify` (1:1)

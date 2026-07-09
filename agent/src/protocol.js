@@ -26,7 +26,12 @@ const CMD_LEN = 8;
 
 // One frame = 34*236 sensor bytes == 68*118 logical image == 8024 bytes
 const IMAGE_BYTES = 8024;
-const RECV_CHUNK = 8000; // driver reads image in two bulk IN transfers (8000 + 24)
+const RECV_CHUNK = 8000; // first bulk IN transfer
+const RECV_TAIL = 24; // second bulk IN transfer (8000 + 24 = 8024)
+
+// Reference driver polls with a short per-read timeout until a finger arrives.
+const READ_TIMEOUT_MS = 300;
+const SCAN_DEADLINE_MS = 10000;
 
 // Sensor geometry -> logical grayscale image
 const SENSOR_COLS = 34;
@@ -45,6 +50,9 @@ module.exports = {
   CMD_LEN,
   IMAGE_BYTES,
   RECV_CHUNK,
+  RECV_TAIL,
+  READ_TIMEOUT_MS,
+  SCAN_DEADLINE_MS,
   SENSOR_COLS,
   SENSOR_ROWS,
   IMG_WIDTH,

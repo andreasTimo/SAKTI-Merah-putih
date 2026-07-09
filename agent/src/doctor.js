@@ -89,7 +89,7 @@ async function main() {
   // 3. Claim (open + claim interface) — the real cross-OS proof
   section('3. Device claim (open + claim interface 0)');
   try {
-    const info = dev.probe();
+    const info = await dev.probe();
     ok(`claimed ${info.productId}; endpoints: ${info.endpoints.map((e) => e.address).join(', ')}`);
     report.checks.claimed = true;
     report.probe = info;

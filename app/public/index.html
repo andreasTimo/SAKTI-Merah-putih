@@ -65,13 +65,22 @@
         ctx.putImageData(img, 0, 0);
       }
       $('scan').onclick = async () => {
-        $('scan').disabled = true; $('out').textContent = 'Merekam…';
+        $('scan').disabled = true; $('out').textContent = 'Merekam… tempelkan jari pada sensor.';
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 25000); // never hang forever
         try {
-          const r = await fetch('/api/capture', { method: 'POST' }).then((r) => r.json());
+          const r = await fetch('/api/capture', { method: 'POST', signal: ctrl.signal }).then((r) => r.json());
+          if (r.ok === false || r.error) throw new Error(r.error || 'capture gagal');
           $('out').textContent = JSON.stringify({ ok: r.ok, initOk: r.initOk, stats: r.stats }, null, 2);
           if (r.pgmBase64) draw(r.pgmBase64);
-        } catch (e) { $('out').textContent = 'Gagal: ' + e.message; }
-        $('scan').disabled = false;
+        } catch (e) {
+          $('out').textContent = e.name === 'AbortError'
+            ? 'Timeout: sensor tidak mengirim data (cek jari / binding driver).'
+            : 'Gagal: ' + e.message;
+        } finally {
+          clearTimeout(timer);
+          $('scan').disabled = false;
+        }
       };
       health(); setInterval(health, 4000);
     </script>

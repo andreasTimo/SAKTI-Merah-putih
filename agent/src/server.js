@@ -65,3 +65,11 @@ server.listen(PORT, HOST, () => {
   console.log(`[agent] SAKTI fingerprint agent listening on http://${HOST}:${PORT}`);
   console.log('[agent] routes: GET /health, POST /capture');
 });
+
+// Crash resilience: a stray USB/JS error must log, not kill the agent.
+process.on('uncaughtException', (err) => {
+  console.error('[agent] uncaughtException (kept alive):', err.message);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[agent] unhandledRejection (kept alive):', err && err.message);
+});
