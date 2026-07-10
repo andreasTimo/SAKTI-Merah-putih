@@ -17,9 +17,64 @@ Windows PC: CS9711 -> native SAKTI agent (127.0.0.1:7373)
 Cloud Run: web/API -> matcher -> durable production database
 ```
 
-The frame is captured only by the local agent, then sent by the browser over
-HTTPS to the Cloud Run API for enrollment/verification. The matcher must not
-persist raw PGM frames.
+The frame is captured only by the local agent. The station-local testing mode
+below keeps enrollment and verification on the workstation as well. A later
+cloud matcher design must still avoid persisting raw PGM frames.
+
+## Initial Testing Without a Cloud Database
+
+For the first real-device Cloud Run test, use **station-local** mode. Cloud Run
+hosts only the UI and temporary in-memory member registry. The browser calls the
+loopback SAKTI station for capture, SIGFM matching, and local SQLite BLOB
+persistence. Raw PGM frames and templates do not pass through Cloud Run.
+
+```text
+Cloud Run frontend -> browser -> 127.0.0.1:7373 station agent -> 127.0.0.1:8090 local matcher -> local SQLite BLOB
+```
+
+Set these Cloud Run service variables:
+
+```text
+BIO_MODE=real
+TARGET_AREAS=15
+CAPTURE_TRANSPORT=browser-local
+BIOMETRIC_TRANSPORT=station-local
+LOCAL_AGENT_URL=http://127.0.0.1:7373
+```
+
+Start the local matcher and agent on the Windows workstation. The agent must use
+the Cloud Run URL as an exact allowed browser origin and must be launched from
+an elevated terminal:
+
+```powershell
+$env:AGENT_ALLOWED_ORIGINS = 'https://YOUR_CLOUD_RUN_URL'
+$env:LOCAL_MATCHER_URL = 'http://127.0.0.1:8090'
+npm run agent
+```
+
+This is persistent only on that workstation. A member enrolled on PC A cannot
+be verified on PC B until durable shared storage is designed. The Cloud Run
+member registry also resets on revision/instance replacement, so use this mode
+only for a single-station testing session.
+
+## Deploy the Frontend
+
+Use a nearby Cloud Run region, for example Jakarta (`asia-southeast2`):
+
+```bash
+gcloud run deploy sakti-frontend-test \
+  --source=app \
+  --region=asia-southeast2 \
+  --allow-unauthenticated \
+  --port=8080 \
+  --set-env-vars=BIO_MODE=real,TARGET_AREAS=15,CAPTURE_TRANSPORT=browser-local,BIOMETRIC_TRANSPORT=station-local,LOCAL_AGENT_URL=http://127.0.0.1:7373
+```
+
+For source deployment, the Cloud Build service account needs read access to the
+Cloud Run source bucket and **Artifact Registry Writer** on the generated
+`cloud-run-source-deploy` repository. It should also have Logs Writer so build
+errors are visible. Grant the narrowest scope available; do not make the
+station agent or matcher public.
 
 ## Browser-Local Capture Configuration
 

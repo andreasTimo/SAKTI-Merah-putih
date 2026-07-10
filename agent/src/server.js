@@ -11,6 +11,7 @@ const { allowedOrigins, browserOriginAllowed, corsHeaders } = require('./cors');
 
 const PORT = Number(process.env.AGENT_PORT) || 7373;
 const HOST = process.env.AGENT_HOST || '127.0.0.1';
+const LOCAL_MATCHER_URL = (process.env.LOCAL_MATCHER_URL || 'http://127.0.0.1:8090').replace(/\/$/, '');
 const ALLOWED_BROWSER_ORIGINS = allowedOrigins();
 
 // Burst quality thresholds — tune without a rebuild via env.
@@ -28,6 +29,38 @@ function send(req, res, code, body) {
     ...corsHeaders(req, ALLOWED_BROWSER_ORIGINS),
   });
   res.end(data);
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (chunk) => (data += chunk));
+    req.on('end', () => resolve(data));
+  });
+}
+
+async function forwardMatcher(req, res, matcherPath) {
+  try {
+    const body = req.method === 'GET' ? undefined : await readBody(req);
+    const upstream = await fetch(`${LOCAL_MATCHER_URL}${matcherPath}`, {
+      method: req.method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body,
+    });
+    const text = await upstream.text();
+    res.writeHead(upstream.status, {
+      'Content-Type': 'application/json',
+      ...corsHeaders(req, ALLOWED_BROWSER_ORIGINS),
+    });
+    res.end(text);
+  } catch (error) {
+    send(req, res, 502, {
+      ok: false,
+      error: 'local matcher unreachable',
+      detail: error.message,
+      matcherUrl: LOCAL_MATCHER_URL,
+    });
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -51,6 +84,19 @@ const server = http.createServer(async (req, res) => {
       devicePresent: devices.length > 0,
       devices,
     });
+  }
+
+  // Station-local mode keeps capture, matching, and template persistence on
+  // the Windows workstation. A Cloud Run frontend calls these loopback routes;
+  // biometric frames never travel through the Cloud Run service.
+  if (req.method === 'GET' && req.url === '/station/matcher-health') {
+    return forwardMatcher(req, res, '/health');
+  }
+  if (req.method === 'POST' && req.url === '/station/enroll-tap') {
+    return forwardMatcher(req, res, '/enroll-tap');
+  }
+  if (req.method === 'POST' && req.url === '/station/verify') {
+    return forwardMatcher(req, res, '/verify');
   }
 
   if (req.method === 'POST' && req.url === '/capture') {
@@ -121,13 +167,22 @@ const server = http.createServer(async (req, res) => {
 
   return send(req, res, 404, {
     error: 'not found',
-    routes: ['GET /health', 'POST /capture', 'POST /capture-burst', 'POST /capture-tap'],
+    routes: [
+      'GET /health',
+      'POST /capture',
+      'POST /capture-burst',
+      'POST /capture-tap',
+      'GET /station/matcher-health',
+      'POST /station/enroll-tap',
+      'POST /station/verify',
+    ],
   });
 });
 
 server.listen(PORT, HOST, () => {
   console.log(`[agent] SAKTI fingerprint agent listening on http://${HOST}:${PORT}`);
   console.log('[agent] routes: GET /health, POST /capture, POST /capture-burst');
+  console.log(`[agent] local matcher: ${LOCAL_MATCHER_URL}`);
   if (ALLOWED_BROWSER_ORIGINS.size) {
     console.log(`[agent] browser-local origins: ${[...ALLOWED_BROWSER_ORIGINS].join(', ')}`);
   }

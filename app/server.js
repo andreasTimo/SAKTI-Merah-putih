@@ -14,6 +14,7 @@ const MATCHER_URL = process.env.MATCHER_URL || 'http://matcher:8090';
 const BIO_MODE = process.env.BIO_MODE === 'real' ? 'real' : 'mock';
 const TARGET_AREAS = Number(process.env.TARGET_AREAS) || 15;
 const CAPTURE_TRANSPORT = process.env.CAPTURE_TRANSPORT === 'browser-local' ? 'browser-local' : 'server-proxy';
+const BIOMETRIC_TRANSPORT = process.env.BIOMETRIC_TRANSPORT === 'station-local' ? 'station-local' : 'server-proxy';
 const LOCAL_AGENT_URL = (process.env.LOCAL_AGENT_URL || 'http://127.0.0.1:7373').replace(/\/$/, '');
 
 const INDEX = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
@@ -69,6 +70,7 @@ const server = http.createServer(async (req, res) => {
       bioMode: BIO_MODE,
       target: TARGET_AREAS,
       captureTransport: CAPTURE_TRANSPORT,
+      biometricTransport: BIOMETRIC_TRANSPORT,
       localAgentUrl: CAPTURE_TRANSPORT === 'browser-local' ? LOCAL_AGENT_URL : null,
     });
   }

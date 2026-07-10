@@ -92,7 +92,7 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      let cfg = { bioMode: 'mock', target: 15, captureTransport: 'server-proxy', localAgentUrl: null };
+      let cfg = { bioMode: 'mock', target: 15, captureTransport: 'server-proxy', biometricTransport: 'server-proxy', localAgentUrl: null };
       let current = null; // last registered member (for enroll)
       let resolved = null; // resolved member for verify
 
@@ -109,6 +109,12 @@
           ? cfg.localAgentUrl + route
           : '/api' + route;
       }
+      function biometricUrl(route) {
+        return cfg.biometricTransport === 'station-local'
+          ? cfg.localAgentUrl + '/station' + route
+          : '/api' + route;
+      }
+      const postBiometric = (route, body) => post(biometricUrl(route), body);
       async function captureTap() {
         const r = await fetch(agentUrl('/capture-tap'), { method: 'POST' }).then((x) => x.json());
         if (r.ok === false || r.error) throw new Error(r.error || 'tap gagal');
@@ -121,7 +127,7 @@
           $('dotAgent').className = 'dot ' + (a.devicePresent ? 'on' : 'off');
           $('agentStatus').textContent = a.devicePresent ? 'Sensor siap' : 'Sensor belum terpasang';
         } catch { $('dotAgent').className = 'dot off'; $('agentStatus').textContent = 'Agent native mati'; }
-        try { const m = await fetch('/api/matcher-health').then((r) => r.json());
+        try { const m = await fetch(biometricUrl('/matcher-health')).then((r) => r.json());
           $('dotMatcher').className = 'dot on';
           $('matcherStatus').textContent = `Matcher OK · ${m.enrolledMembers} member`;
         } catch { $('dotMatcher').className = 'dot off'; $('matcherStatus').textContent = 'Matcher mati'; }
@@ -159,7 +165,7 @@
             $('regOut').textContent = 'Tap jari di posisi berbeda…';
             const cap = await captureTap();
             if (!cap.frame) continue;
-            const r = await post('/api/enroll-tap', { memberId, image: cap.frame });
+            const r = await postBiometric('/enroll-tap', { memberId, image: cap.frame });
             if (r.ok === false) continue;
             $('enrollBar').style.width = Math.min(100, (r.templatesTotal / r.target) * 100) + '%';
             const signal = Number.isFinite(r.keypoints)
@@ -201,7 +207,7 @@
             $('svcOut').textContent = 'Tap jari untuk verifikasi…';
             const cap = await captureTap();
             if (!cap.frame) throw new Error('tidak ada frame jelas — tekan lebih rata');
-            r = await post('/api/verify', { memberId, image: cap.frame });
+            r = await postBiometric('/verify', { memberId, image: cap.frame });
           }
           $('svcOut').textContent = JSON.stringify(r, null, 2);
           if (r.ok) {
@@ -219,7 +225,9 @@
           $('modeNote').textContent = 'Mode MOCK: flow diuji tanpa sensor. Enroll = simulasi; verifikasi pakai toggle "simulasi jari salah".';
           $('wrapWrong').style.display = 'inline-flex';
         } else {
-          $('modeNote').textContent = cfg.captureTransport === 'browser-local'
+          $('modeNote').textContent = cfg.biometricTransport === 'station-local'
+            ? 'Mode REAL Cloud Station: capture, SIGFM, dan template berjalan lokal; enrollment membutuhkan 15 capture.'
+            : cfg.captureTransport === 'browser-local'
             ? 'Mode REAL Cloud: browser terhubung ke agent CS9711 lokal; enrollment membutuhkan 15 capture.'
             : 'Mode REAL: CS9711 + matcher SIGFM; enrollment membutuhkan 15 capture.';
         }
