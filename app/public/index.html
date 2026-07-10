@@ -3,166 +3,218 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SAKTI Merah Putih — Fingerprint 1:1</title>
+    <title>SAKTI Merah Putih — Registrasi & Verifikasi Anggota</title>
     <style>
-      :root { --red: #c8102e; --ink: #1a1a1a; --paper: #fafafa; --ok: #1aaa55; }
+      :root { --red: #c8102e; --ink: #1a1a1a; --paper: #f6f6f7; --ok: #1aaa55; }
       * { box-sizing: border-box; }
       body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--paper); }
-      header { background: var(--red); color: #fff; padding: 16px 24px; }
-      header h1 { margin: 0; font-size: 17px; letter-spacing: .3px; }
-      main { max-width: 720px; margin: 24px auto; padding: 0 20px; display: grid; gap: 18px; }
-      .card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-      .card h2 { margin: 0 0 12px; font-size: 15px; }
-      label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; }
+      header { background: var(--red); color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+      header h1 { margin: 0; font-size: 17px; }
+      .badge { font-size: 12px; background: rgba(255,255,255,.2); padding: 3px 9px; border-radius: 20px; }
+      main { max-width: 760px; margin: 24px auto; padding: 0 20px; display: grid; gap: 18px; }
+      .card { background: #fff; border: 1px solid #eaeaea; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+      .card h2 { margin: 0 0 14px; font-size: 15px; }
+      label { display: block; font-size: 12px; color: #666; margin: 8px 0 3px; }
       input { padding: 9px 11px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; width: 100%; }
-      .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-      .row > div { flex: 1; min-width: 120px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+      .row > div { flex: 1; min-width: 130px; }
       button { background: var(--red); color: #fff; border: 0; border-radius: 8px; padding: 11px 18px; font-size: 14px; cursor: pointer; white-space: nowrap; }
-      button:disabled { opacity: .5; cursor: default; }
+      button.ghost { background: #555; } button:disabled { opacity: .45; cursor: default; }
       pre { background: #111; color: #7CFC7C; padding: 12px; border-radius: 8px; overflow: auto; font-size: 12px; margin: 12px 0 0; }
-      canvas { image-rendering: pixelated; width: 102px; height: 177px; border: 1px solid #ddd; background: #f0f0f0; }
-      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #bbb; margin-right: 6px; }
+      canvas { image-rendering: pixelated; width: 68px; height: 118px; border: 1px solid #ddd; background: #f0f0f0; }
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #bbb; margin-right: 5px; }
       .dot.on { background: var(--ok); } .dot.off { background: var(--red); }
+      .bar { height: 12px; background: #eee; border-radius: 6px; overflow: hidden; margin: 10px 0 4px; }
+      .bar > div { height: 100%; width: 0; background: var(--ok); transition: width .2s; }
       .verdict { font-size: 20px; font-weight: 700; margin-top: 10px; }
       .verdict.match { color: var(--ok); } .verdict.nomatch { color: var(--red); }
-      small { color: #777; }
+      .kartu { margin-top: 12px; padding: 14px 16px; border-radius: 10px; background: linear-gradient(135deg,#c8102e,#8a0b20); color: #fff; }
+      .kartu .id { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+      small { color: #777; } .muted { color:#888; font-size:13px; }
     </style>
   </head>
   <body>
-    <header><h1>SAKTI Merah Putih — Verifikasi Sidik Jari 1:1</h1></header>
+    <header>
+      <h1>SAKTI Merah Putih — Registrasi & Verifikasi</h1>
+      <span class="badge" id="modeBadge">mode…</span>
+    </header>
     <main>
       <div class="card">
         <p style="margin:0">
           <span id="dotAgent" class="dot"></span><span id="agentStatus">Agent…</span>
           &nbsp;&nbsp;<span id="dotMatcher" class="dot"></span><span id="matcherStatus">Matcher…</span>
         </p>
-        <small>Cache in-memory: data enroll hilang saat matcher/app dimatikan.</small>
+        <small id="modeNote"></small>
       </div>
 
+      <!-- 1. REGISTRASI -->
       <div class="card">
-        <h2>1. Enroll — TAP berulang (gaya Touch ID)</h2>
+        <h2>1. Registrasi Anggota</h2>
         <div class="row">
-          <div><label>Member ID</label><input id="enrollId" placeholder="mis. anggota-001" /></div>
-          <button id="enrollBtn" disabled>Mulai Enroll</button>
-          <button id="enrollStop" disabled style="background:#555">Stop</button>
+          <div><label>Member ID</label><input id="regId" placeholder="anggota-001" /></div>
+          <div><label>Nama</label><input id="regName" placeholder="Budi Santoso" /></div>
+          <div><label>NIK (opsional)</label><input id="regNik" placeholder="32xxxxxxxxxxxxxx" /></div>
+          <button id="regBtn">Daftar</button>
+        </div>
+        <div id="kartu" class="kartu" style="display:none">
+          <div class="muted" style="color:#ffd">Kartu Anggota SAKTI</div>
+          <div class="id" id="kartuId">—</div>
+          <div id="kartuName">—</div>
+          <div id="kartuEnroll" class="muted" style="color:#ffd">belum enroll sidik jari</div>
+        </div>
+        <div class="row" id="enrollRow" style="display:none; margin-top:12px">
+          <button id="enrollBtn">Enroll Sidik Jari</button>
+          <button id="enrollStop" class="ghost" disabled>Stop</button>
           <canvas id="preview" width="68" height="118"></canvas>
         </div>
-        <div style="height:14px;background:#eee;border-radius:7px;overflow:hidden;margin:12px 0 6px">
-          <div id="enrollBar" style="height:100%;width:0;background:var(--ok);transition:width .2s"></div>
-        </div>
-        <small>Tempel jari (angkat–tap ulang) di <b>posisi berbeda-beda</b>: ujung, tengah, kiri, kanan.
-          Sistem menyimpan tiap <b>area baru</b> sampai penuh. Tekan rata, jangan geser.</small>
-        <pre id="enrollOut">–</pre>
+        <div class="bar" id="enrollBarWrap" style="display:none"><div id="enrollBar"></div></div>
+        <pre id="regOut">–</pre>
       </div>
 
+      <!-- 2. LAYANAN / VERIFIKASI -->
       <div class="card">
-        <h2>2. Verifikasi 1:1 — TAP jari</h2>
+        <h2>2. Layanan — Verifikasi 1:1 (Kartu/Member-ID + Sidik Jari)</h2>
         <div class="row">
-          <div><label>Member ID</label><input id="verifyId" placeholder="mis. anggota-001" /></div>
-          <button id="verifyBtn" disabled>Verifikasi (tap)</button>
+          <div><label>Member ID (ketik / scan kartu)</label><input id="svcId" placeholder="anggota-001" /></div>
+          <button id="resolveBtn" class="ghost">Cari</button>
+        </div>
+        <div id="svcMember" class="muted" style="margin-top:8px"></div>
+        <div class="row" id="verifyRow" style="display:none; margin-top:10px">
+          <label id="wrapWrong" style="display:none; align-items:center; gap:6px; font-size:13px; color:#666">
+            <input type="checkbox" id="simWrong" style="width:auto" /> simulasi jari salah
+          </label>
+          <button id="verifyBtn">Verifikasi Sidik Jari</button>
         </div>
         <div id="verdict" class="verdict"></div>
-        <pre id="verifyOut">–</pre>
+        <pre id="svcOut">–</pre>
       </div>
     </main>
 
     <script>
       const $ = (id) => document.getElementById(id);
+      let cfg = { bioMode: 'mock', target: 8 };
+      let current = null; // last registered member (for enroll)
+      let resolved = null; // resolved member for verify
 
       function draw(pgmB64) {
         const bytes = Uint8Array.from(atob(pgmB64), (c) => c.charCodeAt(0));
-        let i = 0, n = 0;
-        while (n < 3) { if (bytes[i++] === 10) n++; } // skip "P5\n68 118\n255\n"
+        let i = 0, n = 0; while (n < 3) { if (bytes[i++] === 10) n++; }
         const cv = $('preview'), ctx = cv.getContext('2d'), img = ctx.createImageData(68, 118);
-        for (let p = 0; p < 68 * 118; p++) {
-          const v = bytes[i + p];
-          img.data[p * 4] = img.data[p * 4 + 1] = img.data[p * 4 + 2] = v;
-          img.data[p * 4 + 3] = 255;
-        }
+        for (let p = 0; p < 68 * 118; p++) { const v = bytes[i + p]; img.data[p*4]=img.data[p*4+1]=img.data[p*4+2]=v; img.data[p*4+3]=255; }
         ctx.putImageData(img, 0, 0);
       }
-
-      // One tap: short burst, agent returns the single sharpest frame (or null).
+      const post = (u, b) => fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
       async function captureTap() {
         const r = await fetch('/api/capture-tap', { method: 'POST' }).then((x) => x.json());
         if (r.ok === false || r.error) throw new Error(r.error || 'tap gagal');
         if (r.frame) draw(r.frame);
-        return r; // { frame, quality, rawFrames, captured }
+        return r;
       }
 
       async function health() {
-        try {
-          const a = await fetch('/api/health').then((r) => r.json());
-          const present = a.devicePresent;
-          $('dotAgent').className = 'dot ' + (present ? 'on' : 'off');
-          $('agentStatus').textContent = present ? 'Sensor siap' : 'Sensor belum terpasang';
+        try { const a = await fetch('/api/health').then((r) => r.json());
+          $('dotAgent').className = 'dot ' + (a.devicePresent ? 'on' : 'off');
+          $('agentStatus').textContent = a.devicePresent ? 'Sensor siap' : 'Sensor belum terpasang';
         } catch { $('dotAgent').className = 'dot off'; $('agentStatus').textContent = 'Agent native mati'; }
-        try {
-          const m = await fetch('/api/matcher-health').then((r) => r.json());
+        try { const m = await fetch('/api/matcher-health').then((r) => r.json());
           $('dotMatcher').className = 'dot on';
-          $('matcherStatus').textContent = `Matcher OK · ${m.enrolledMembers} member / ${m.totalTemplates} template`;
-          if (!enrolling) { $('enrollBtn').disabled = false; $('verifyBtn').disabled = false; }
+          $('matcherStatus').textContent = `Matcher OK · ${m.enrolledMembers} member`;
         } catch { $('dotMatcher').className = 'dot off'; $('matcherStatus').textContent = 'Matcher mati'; }
       }
+
+      // ---- Registrasi ----
+      $('regBtn').onclick = async () => {
+        const memberId = $('regId').value.trim(), name = $('regName').value.trim(), nik = $('regNik').value.trim();
+        if (!memberId || !name) { $('regOut').textContent = 'Member ID & Nama wajib.'; return; }
+        const r = await post('/api/members', { memberId, name, nik });
+        if (r.error) { $('regOut').textContent = 'Gagal: ' + r.error; return; }
+        current = r.member;
+        $('kartu').style.display = 'block'; $('kartuId').textContent = r.member.memberId;
+        $('kartuName').textContent = r.member.name; $('kartuEnroll').textContent = 'belum enroll sidik jari';
+        $('enrollRow').style.display = 'flex';
+        $('regOut').textContent = `Anggota "${r.member.name}" terdaftar. Member-ID: ${r.member.memberId} (jadi kartu/QR). Lanjut enroll sidik jari.`;
+      };
 
       let enrolling = false;
       $('enrollStop').onclick = () => { enrolling = false; };
       $('enrollBtn').onclick = async () => {
-        const memberId = $('enrollId').value.trim();
-        if (!memberId) { $('enrollOut').textContent = 'Isi Member ID dulu.'; return; }
-        enrolling = true;
-        $('enrollBtn').disabled = true; $('enrollStop').disabled = false;
-        $('enrollBar').style.width = '0';
-        let last = null;
+        if (!current) return;
+        const memberId = current.memberId;
+        if (cfg.bioMode === 'mock') {
+          const r = await post('/api/mock/enroll', { memberId });
+          $('regOut').textContent = JSON.stringify(r, null, 2);
+          if (r.ok) markEnrolled();
+          return;
+        }
+        // real: guided tap loop
+        enrolling = true; $('enrollBtn').disabled = true; $('enrollStop').disabled = false;
+        $('enrollBarWrap').style.display = 'block'; $('enrollBar').style.width = '0';
         try {
           while (enrolling) {
-            $('enrollOut').textContent = 'Tap jari di posisi berbeda…' + (last ? `\n${last}` : '');
+            $('regOut').textContent = 'Tap jari di posisi berbeda…';
             const cap = await captureTap();
-            if (!cap.frame) continue; // no finger this window — keep waiting
-            const r = await fetch('/api/enroll-tap', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ memberId, image: cap.frame }),
-            }).then((x) => x.json());
-            if (r.ok === false) { last = 'Gagal: ' + r.error; continue; }
+            if (!cap.frame) continue;
+            const r = await post('/api/enroll-tap', { memberId, image: cap.frame });
+            if (r.ok === false) continue;
             $('enrollBar').style.width = Math.min(100, (r.templatesTotal / r.target) * 100) + '%';
-            last = (r.accepted ? `✓ Area baru` : `↺ Sudah ada (geser ke posisi lain)`) +
-              ` — ${r.templatesTotal}/${r.target} area (skor ${r.bestScore.toFixed(0)})`;
-            if (r.coverageComplete) {
-              enrolling = false;
-              $('enrollOut').textContent = `✅ Enroll selesai — ${r.templatesTotal} area tersimpan.`;
-              break;
-            }
-            await new Promise((s) => setTimeout(s, 350)); // brief pause between taps
+            $('regOut').textContent = (r.accepted ? '✓ Area baru' : '↺ Sudah ada, geser') + ` — ${r.templatesTotal}/${r.target} (skor ${r.bestScore.toFixed(0)})`;
+            if (r.coverageComplete) { enrolling = false; markEnrolled(); break; }
+            await new Promise((s) => setTimeout(s, 300));
           }
-        } catch (e) { $('enrollOut').textContent = 'Gagal: ' + e.message; }
-        enrolling = false;
-        $('enrollBtn').disabled = false; $('enrollStop').disabled = true; health();
+        } catch (e) { $('regOut').textContent = 'Gagal: ' + e.message; }
+        enrolling = false; $('enrollBtn').disabled = false; $('enrollStop').disabled = true; health();
       };
+      function markEnrolled() {
+        if (current) current.enrolled = true;
+        $('kartuEnroll').textContent = '✓ sidik jari ter-enroll';
+        $('regOut').textContent = `✅ Enroll selesai untuk ${current.name}. Kartu siap dipakai di Layanan.`;
+      }
 
+      // ---- Layanan / Verifikasi ----
+      $('resolveBtn').onclick = async () => {
+        const id = $('svcId').value.trim();
+        if (!id) return;
+        const r = await fetch('/api/members/' + encodeURIComponent(id)).then((x) => x.json());
+        $('verdict').textContent = ''; $('verdict').className = 'verdict';
+        if (r.error) { resolved = null; $('svcMember').textContent = '✗ ' + r.error; $('verifyRow').style.display = 'none'; return; }
+        resolved = r.member;
+        $('svcMember').innerHTML = `Anggota: <b>${r.member.name}</b> (${r.member.memberId}) — ${r.member.enrolled ? 'sudah enroll' : 'BELUM enroll'}`;
+        $('verifyRow').style.display = 'flex';
+      };
       $('verifyBtn').onclick = async () => {
-        const memberId = $('verifyId').value.trim();
-        if (!memberId) { $('verifyOut').textContent = 'Isi Member ID dulu.'; return; }
-        $('verifyBtn').disabled = true; $('verdict').textContent = ''; $('verdict').className = 'verdict';
+        if (!resolved) return;
+        const memberId = resolved.memberId;
+        $('verdict').textContent = ''; $('verdict').className = 'verdict'; $('verifyBtn').disabled = true;
         try {
-          $('verifyOut').textContent = 'Tap jari untuk verifikasi…';
-          const cap = await captureTap();
-          if (!cap.frame) throw new Error(`tidak ada frame jelas dari ${cap.rawFrames} rekaman — tekan lebih rata`);
-          const r = await fetch('/api/verify', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ memberId, image: cap.frame }),
-          }).then((x) => x.json());
-          $('verifyOut').textContent = JSON.stringify(r, null, 2);
-          if (r.ok) {
-            $('verdict').textContent = r.matched
-              ? `✓ COCOK (skor ${r.score.toFixed(1)} ≥ ${r.threshold})`
-              : `✗ TIDAK COCOK (skor ${r.score.toFixed(1)} < ${r.threshold})`;
-            $('verdict').className = 'verdict ' + (r.matched ? 'match' : 'nomatch');
+          let r;
+          if (cfg.bioMode === 'mock') {
+            r = await post('/api/mock/verify', { memberId, simulateWrong: $('simWrong').checked });
+          } else {
+            $('svcOut').textContent = 'Tap jari untuk verifikasi…';
+            const cap = await captureTap();
+            if (!cap.frame) throw new Error('tidak ada frame jelas — tekan lebih rata');
+            r = await post('/api/verify', { memberId, image: cap.frame });
           }
-        } catch (e) { $('verifyOut').textContent = 'Gagal: ' + e.message; }
+          $('svcOut').textContent = JSON.stringify(r, null, 2);
+          if (r.ok) {
+            $('verdict').textContent = r.matched ? `✓ COCOK — ${resolved.name}` : `✗ TIDAK COCOK`;
+            $('verdict').className = 'verdict ' + (r.matched ? 'match' : 'nomatch');
+          } else { $('verdict').textContent = '✗ ' + (r.error || 'gagal'); $('verdict').className = 'verdict nomatch'; }
+        } catch (e) { $('svcOut').textContent = 'Gagal: ' + e.message; }
         $('verifyBtn').disabled = false;
       };
 
-      health(); setInterval(health, 4000);
+      (async () => {
+        cfg = await fetch('/api/config').then((r) => r.json());
+        $('modeBadge').textContent = 'BIO_MODE: ' + cfg.bioMode;
+        if (cfg.bioMode === 'mock') {
+          $('modeNote').textContent = 'Mode MOCK: flow diuji tanpa sensor. Enroll = simulasi; verifikasi pakai toggle "simulasi jari salah".';
+          $('wrapWrong').style.display = 'inline-flex';
+        } else {
+          $('modeNote').textContent = 'Mode REAL: pakai sensor CS9711 (agent) + matcher SourceAFIS.';
+        }
+        health(); setInterval(health, 4000);
+      })();
     </script>
   </body>
 </html>

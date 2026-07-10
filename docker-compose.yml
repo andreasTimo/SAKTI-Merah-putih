@@ -13,6 +13,9 @@ services:
       - PORT=8080
       - AGENT_URL=http://host.docker.internal:7373
       - MATCHER_URL=http://matcher:8090
+      # mock = bangun/uji flow tanpa sensor; ganti ke 'real' untuk pakai CS9711.
+      - BIO_MODE=mock
+      - TARGET_AREAS=8
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

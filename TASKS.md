@@ -66,9 +66,29 @@ image; general-vision tak diskriminatif untuk biometrik; cloud melanggar UU PDP)
 Rujukan: github.com/tim-rohwedder/fixed-length-fingerprint-extractors. Perlu
 kumpulkan dataset dari CS9711 + kemungkinan fine-tune.
 
-## ⬜ Task 3 — e-KTP NFC reader
-- [ ] Bridge NFC (pola sama: agent native → localhost)
-- [ ] Baca NIK + data identitas dari chip e-KTP
+## 🔨 Task 3 — Flow "Kartu/Member-ID → Verifikasi 1:1" (identitas non-biometrik)
+
+**Realita e-KTP (diverifikasi):** baca NIK/biodata dari chip e-KTP **terkunci** —
+butuh **SAM Dukcapil + PKS** + mutual-auth. NFC reader biasa hanya bisa baca **UID
+kartu** (bukan NIK). Jadi identitas resmi e-KTP = jalur Dukcapil (di luar scope MVP).
+
+**Touch ID/Face ID (diverifikasi):** LocalAuthentication/BiometricPrompt hanya
+pass/fail untuk **pemilik device**, tak bisa identifikasi dari DB — **tidak cocok**
+untuk satu alat banyak anggota (kasus koperasi). CS9711 tetap hardware yang benar.
+
+**Keputusan:** identitas dari **Member-ID/QR** yang SAKTI terbitkan (sesuai proposal
+"QR Member"), sidik jari untuk **1:1**. Backend biometrik **pluggable** (`BIO_MODE`)
+supaya flow bisa dibangun tanpa terhambat kualitas sensor.
+
+- [x] Registry anggota in-memory (memberId, nama, NIK) — `POST/GET /api/members`
+- [x] Flow registrasi: daftar → enroll → terbitkan Kartu/Member-ID
+- [x] Flow layanan: resolve Member-ID → verifikasi 1:1 → verdict + nama anggota
+- [x] `BIO_MODE=mock` (bangun/uji flow tanpa sensor) | `real` (CS9711+matcher)
+- [x] Terverifikasi end-to-end (mock): register→enroll→resolve→verify(match/wrong)→404
+- [ ] Uji flow di `BIO_MODE=real` dengan CS9711 (enroll tap + verify)
+- [ ] QR visual (render + scan webcam) — sekarang Member-ID diketik/scan manual
+- [ ] (Opsional) baca UID NFC kartu via reader PC/SC sebagai token
+- [ ] (Resmi/nanti) integrasi Dukcapil SAM untuk biodata e-KTP asli
 
 ## ⬜ Task 4 — Alur registrasi end-to-end
 - [ ] e-KTP → sidik jari → foto wajah → terbit ID/QR anggota
