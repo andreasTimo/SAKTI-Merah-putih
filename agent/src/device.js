@@ -221,4 +221,43 @@ async function capture({ deadlineMs = P.SCAN_DEADLINE_MS } = {}) {
   });
 }
 
-module.exports = { listCandidates, findDevice, withInterface, probe, capture, hex };
+// Swipe/burst capture: keep firing SCAN and collect every frame that arrives
+// while the finger slides across the sensor, for up to durationMs (or maxFrames).
+// Returns raw frames; the server remaps + filters them into distinct views.
+async function captureBurst({ durationMs = 4000, maxFrames = 24 } = {}) {
+  return withInterface(async ({ pid, iface }) => {
+    const outEp = iface.endpoints.find((e) => e.direction === 'out');
+    const inEp =
+      iface.endpoints.find((e) => e.address === P.IN_ENDPOINT) ||
+      iface.endpoints.find((e) => e.direction === 'in');
+    if (!outEp || !inEp) throw new Error('Expected bulk IN/OUT endpoints not found on interface 0');
+    inEp.timeout = P.READ_TIMEOUT_MS;
+    outEp.timeout = P.READ_TIMEOUT_MS;
+
+    await transferOut(outEp, P.buildCommand(P.CMD.INIT)).catch(() => {});
+    await transferIn(inEp, 8).catch(() => null); // drain INIT status
+
+    const raws = [];
+    const start = Date.now();
+    while (Date.now() - start < durationMs && raws.length < maxFrames) {
+      await transferOut(outEp, P.buildCommand(P.CMD.SCAN)).catch(() => {});
+      let part1;
+      try {
+        part1 = await transferIn(inEp, P.RECV_CHUNK);
+      } catch (e) {
+        if (!isTimeout(e)) throw e; // real error bubbles; timeout = no finger yet
+        continue;
+      }
+      if (!part1 || part1.length === 0) continue;
+      const part2 = await transferIn(inEp, P.RECV_TAIL).catch(() => Buffer.alloc(0));
+      let raw = Buffer.concat([part1, part2]);
+      if (raw.length < P.IMAGE_BYTES) raw = Buffer.concat([raw, Buffer.alloc(P.IMAGE_BYTES - raw.length)]);
+      raws.push(raw.subarray(0, P.IMAGE_BYTES));
+    }
+    await transferOut(outEp, P.buildCommand(P.CMD.RESET)).catch(() => {});
+    debug('burst collected', raws.length, 'raw frames');
+    return { raws, count: raws.length, productId: hex(pid) };
+  });
+}
+
+module.exports = { listCandidates, findDevice, withInterface, probe, capture, captureBurst, hex };

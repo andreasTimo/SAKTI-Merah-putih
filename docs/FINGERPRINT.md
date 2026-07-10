@@ -61,11 +61,47 @@ di-Docker.
 | `LIBUSB_TRANSFER_TIMED_OUT` | tak ada jari saat polling (normal) | tempel jari saat `npm run proof` |
 | `not found (VID 0x2541)` | device tak terdeteksi / lepas dari bus | cek kabel/port, cabut-colok |
 
-## Matching (fase berikutnya, di luar Task 1)
+`npm run agent` menjalankan preflight Windows sebelum server agent dimulai. Bila
+`node-usb` tidak dapat dimuat, install dependency ulang pada Windows (`npm ci`)
+dan jangan salin `node_modules` dari OS lain. Untuk deployment Cloud Run, lihat
+[`CLOUD_RUN.md`](CLOUD_RUN.md): Cloud Run tidak dapat mengakses USB sensor.
 
-Setelah dapat gambar 68×118: pakai **SourceAFIS** (port .NET/Java) atau **NBIS
-Bozorth3** untuk enroll + verify. Enrollment CS9711 ± 15 sentuhan. Citra parsial →
-utamakan verifikasi **1:1** setelah identitas dari e-KTP/kartu.
+## Matching — SIGFM 1:1
+
+CS9711 mengirim citra partial `68×118`. Pengujian menunjukkan SourceAFIS tidak
+stabil pada pergeseran jari kecil, sehingga service Docker sekarang memakai
+**SIGFM** (pendekatan `libfprint-CS9711`): OpenCV SIFT keypoint/descriptor,
+ratio test 0.75, dan pemeriksaan konsistensi geometri. Ini bukan neural network.
+
+- Enrollment: **15 tahap** (`TARGET_AREAS=15`), sesuai konfigurasi driver CS9711.
+- Verifikasi: bandingkan probe terhadap setiap descriptor enrollment dan pakai
+  skor geometri tertinggi; default `MATCH_THRESHOLD=40`.
+- Persistence: descriptor/keypoint diserialisasi sebagai SQLite **BLOB** pada
+  volume Docker `matcher-data`; frame PGM tidak disimpan.
+- Format BLOB: `sigfm-sift` v1, bukan ISO/IEC 19794-2. Jangan memberi label ISO
+  sebelum memakai extractor yang benar-benar dapat mengekspor minutiae ISO.
+
+Endpoint matcher: `POST /enroll`, `POST /enroll-tap`, `POST /verify`,
+`GET /health`, dan `GET /diagnostics/member?memberId=...`.
+
+> Matcher ini untuk pengujian interoperabilitas CS9711. Evaluasi FAR/FRR dengan
+> beberapa orang dan gunakan enkripsi template sebelum dipakai pada produksi.
+
+### Teknik capture (dari guidebook device)
+
+Sensor = **area kapasitif kecil**, kapasitas **10 template**, FAR <0.001% / FRR <0.1%.
+Guidebook: *tekan rata & mantap, pusatkan inti sidik jari, **jangan digeser cepat**,
+ulangi beberapa kali di posisi berbeda.*
+
+Burst capture (`/capture-burst`) memilih frame berkualitas, bukan frame "bergerak":
+- **std ≥ `MIN_STD`** (default 18) → jari benar-benar menempel
+- **sharpness ≥ `MIN_SHARP`** (default 10) → bukan motion-blur (swipe cepat).
+  Kalibrasi: frame bagus ~17, blur ~6.6 (mean abs gradient |dx|+|dy|).
+- ambil sampai **`MAX_FRAMES`** (default 10) frame paling tajam, buang duplikat.
+
+Knob env di agent (tanpa rebuild): `BURST_MS`, `MIN_STD`, `MIN_SHARP`, `MAX_FRAMES`.
+Gejala lama: swipe pelan → 1 frame (dulu difilter by-gerakan); swipe cepat → banyak
+frame tapi blur → 0 minutiae. Sekarang dipilih by-ketajaman, bukan by-gerakan.
 
 ## Sumber
 
