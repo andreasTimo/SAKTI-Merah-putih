@@ -60,7 +60,7 @@ test('capture releases/closes the device only AFTER all transfers complete', asy
   usb.findByIds = () => mock;
 
   const device = require('../src/device');
-  const res = await device.capture({ timeoutMs: 1000 });
+  const res = await device.capture({ deadlineMs: 1000 });
 
   // Correct lifecycle: open/claim → every transfer → release → close.
   const firstRelease = order.indexOf('release');
@@ -81,8 +81,8 @@ test('two captures cannot run concurrently (device busy lock)', async () => {
 
   const device = require('../src/device');
   const results = await Promise.allSettled([
-    device.capture({ timeoutMs: 1000 }),
-    device.capture({ timeoutMs: 1000 }),
+    device.capture({ deadlineMs: 1000 }),
+    device.capture({ deadlineMs: 1000 }),
   ]);
   const rejected = results.filter((r) => r.status === 'rejected');
   assert.strictEqual(rejected.length, 1, 'exactly one capture is rejected as busy');

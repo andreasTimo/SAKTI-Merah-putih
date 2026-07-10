@@ -55,7 +55,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && req.url === '/capture') {
     try {
-      const result = await device.capture({ timeoutMs: 20000 });
+      const result = await device.capture({ deadlineMs: 20000 });
       const gray = remap(result.raw);
       const stats = frameStats(gray);
       return send(req, res, 200, {

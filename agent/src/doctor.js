@@ -136,7 +136,7 @@ async function main() {
   section('4. Capture (place finger on sensor…)');
   try {
     const { remap, toPGM, frameStats } = require('./image');
-    const res = await dev.capture({ timeoutMs: 20000 });
+    const res = await dev.capture({ deadlineMs: 20000 });
     const gray = remap(res.raw);
     const stats = frameStats(gray);
     fs.mkdirSync(CAPTURE_DIR, { recursive: true });

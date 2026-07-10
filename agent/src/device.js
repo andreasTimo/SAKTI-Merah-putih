@@ -167,7 +167,12 @@ async function probe() {
 
 // Full capture, matching the reference driver: short-poll reads (300ms) until a
 // finger frame arrives (10s deadline), then RESET so the sensor goes idle.
-async function capture({ deadlineMs = P.SCAN_DEADLINE_MS } = {}) {
+async function capture(options = {}) {
+  // `timeoutMs` was used by early callers. Keep it as a compatibility alias,
+  // but make `deadlineMs` the canonical name used by the scan loop.
+  const deadlineMs = Number.isFinite(options.deadlineMs)
+    ? options.deadlineMs
+    : (Number.isFinite(options.timeoutMs) ? options.timeoutMs : P.SCAN_DEADLINE_MS);
   return withInterface(async ({ pid, iface }) => {
     const outEp = iface.endpoints.find((e) => e.direction === 'out');
     const inEp =
