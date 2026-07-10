@@ -6,10 +6,11 @@ registrasi anggota koperasi berbasis **e-KTP (NFC)** + **biometrik sidik jari**.
 Repo ini berisi **Task 1: setup fingerprint** untuk sensor **CS9711 (ChipSailing,
 USB `0x2541:0x0236`)** yang jalan di **Windows dan macOS** tanpa SDK vendor.
 
-> **Cloud Run:** Cloud Run dapat menjalankan web/API dan matcher, tetapi tidak
-> dapat mengakses USB CS9711. Agent tetap wajib berjalan native pada PC petugas.
-> Lihat [`docs/CLOUD_RUN.md`](docs/CLOUD_RUN.md) untuk arsitektur browser-local,
-> konfigurasi Windows, dan gap persistence produksi.
+> **Status deployment:** UI pengujian berjalan lokal di `http://localhost:8080`.
+> Tidak ada deployment Cloud Run aktif. Cloud Run tidak dapat mengakses USB
+> CS9711; agent tetap wajib berjalan native pada PC petugas. Runbook cadangan
+> tersedia di [`docs/CLOUD_RUN.md`](docs/CLOUD_RUN.md) bila deployment diminta
+> kemudian.
 
 ## Arsitektur (kenapa bukan "semua di Docker")
 
@@ -69,6 +70,7 @@ npm run app        # Terminal 2: docker compose up --build  → http://localhost
 ```
 
 Buka `http://localhost:8080`, status agent tampil, klik **Rekam Sidik Jari**.
+Ini adalah alur pengujian utama dan tidak memerlukan akun atau resource cloud.
 
 Di Windows, jalankan dari checkout bersih yang dependency-nya diinstal pada
 Windows itu sendiri: `npm ci`, `npm run setup`, `npm run doctor`, lalu

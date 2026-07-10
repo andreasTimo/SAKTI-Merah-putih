@@ -1,4 +1,34 @@
-# Cloud Run Deployment Boundary
+# Cloud Run Reference Runbook
+
+> **Current project state (2026-07-11): no Cloud Run deployment is active.**
+> The test UI is intentionally local: `npm run agent` plus `npm run app`, then
+> open `http://localhost:8080`. This document is retained only as a reviewed
+> deployment runbook if a Cloud Run demonstration is explicitly requested.
+
+The previous trial resources were removed: the `sakti-frontend-test` service,
+the `cloud-run-source-deploy` Artifact Registry repository, and the generated
+source-build bucket. Keeping the Google APIs enabled does not deploy or bill a
+running service. A future source deployment will create its source bucket and
+repository again as needed.
+
+## Local Testing Default
+
+Run the native USB agent and the Docker UI on the same operator PC:
+
+```bash
+npm run agent  # Terminal 1, elevated on Windows
+npm run app    # Terminal 2 -> http://localhost:8080
+```
+
+Do not set `CAPTURE_TRANSPORT` or `BIOMETRIC_TRANSPORT` for this path. The app
+uses its Docker-to-host agent bridge and the local matcher SQLite volume.
+
+## If Cloud Deployment Is Requested
+
+Complete the production-gap review below first, then follow the remaining
+sections as an opt-in station-local demonstration. Cloud Run hosts a UI only;
+the CS9711, the native agent, and local biometric persistence remain on the
+operator workstation.
 
 ## What Can Run in Cloud Run
 
