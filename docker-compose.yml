@@ -13,17 +13,17 @@ services:
       - PORT=8080
       - AGENT_URL=http://host.docker.internal:7373
       - MATCHER_URL=http://matcher:8090
-      # mock = bangun/uji flow tanpa sensor; ganti ke 'real' untuk pakai CS9711.
-      - BIO_MODE=mock
-      - TARGET_AREAS=8
+      # Real testing uses the native CS9711 agent on the operator host.
+      - BIO_MODE=real
+      - TARGET_AREAS=15
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       - matcher
     restart: unless-stopped
 
-  # SourceAFIS 1:1 verification service. Templates live IN MEMORY only —
-  # stopping this container erases all enrolled fingerprints (testing cache).
+  # CS9711 partial-print SIGFM matcher. Descriptor templates are persisted as
+  # SQLite BLOBs; raw frames are never persisted.
   matcher:
     build: ./matcher
     container_name: sakti-matcher
@@ -32,7 +32,11 @@ services:
     environment:
       - MATCHER_PORT=8090
       - MATCH_THRESHOLD=40
-      # CS9711 68x118 frames need a low DPI so SourceAFIS extracts minutiae
-      # (500 → 0 minutiae; ~150 works). Calibrate on hardware.
-      - SENSOR_DPI=150
+      - TARGET_AREAS=15
+      - TEMPLATE_DB_PATH=/data/sakti-sigfm.sqlite
     restart: unless-stopped
+    volumes:
+      - matcher-data:/data
+
+volumes:
+  matcher-data:

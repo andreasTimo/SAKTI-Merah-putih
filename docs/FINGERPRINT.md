@@ -61,35 +61,31 @@ di-Docker.
 | `LIBUSB_TRANSFER_TIMED_OUT` | tak ada jari saat polling (normal) | tempel jari saat `npm run proof` |
 | `not found (VID 0x2541)` | device tak terdeteksi / lepas dari bus | cek kabel/port, cabut-colok |
 
-## Matching — Task 2 (`matcher/`, SourceAFIS 1:1)
+`npm run agent` menjalankan preflight Windows sebelum server agent dimulai. Bila
+`node-usb` tidak dapat dimuat, install dependency ulang pada Windows (`npm ci`)
+dan jangan salin `node_modules` dari OS lain. Untuk deployment Cloud Run, lihat
+[`CLOUD_RUN.md`](CLOUD_RUN.md): Cloud Run tidak dapat mengakses USB sensor.
 
-Service Java SourceAFIS 3.18.1, storage **in-memory** (ephemeral). Endpoint
-`POST /enroll` (multi-template), `POST /verify` (1:1), `GET /health`.
+## Matching — SIGFM 1:1
 
-### DPI calibration (PENTING)
+CS9711 mengirim citra partial `68×118`. Pengujian menunjukkan SourceAFIS tidak
+stabil pada pergeseran jari kecil, sehingga service Docker sekarang memakai
+**SIGFM** (pendekatan `libfprint-CS9711`): OpenCV SIFT keypoint/descriptor,
+ratio test 0.75, dan pemeriksaan konsistensi geometri. Ini bukan neural network.
 
-SourceAFIS memakai DPI untuk menormalkan frekuensi ridge. Frame CS9711 kecil
-(68×118), jadi **DPI harus rendah** supaya SourceAFIS meng-upscale ke 500 DPI
-internalnya dan menemukan minutiae. Hasil uji pada satu capture asli:
+- Enrollment: **15 tahap** (`TARGET_AREAS=15`), sesuai konfigurasi driver CS9711.
+- Verifikasi: bandingkan probe terhadap setiap descriptor enrollment dan pakai
+  skor geometri tertinggi; default `MATCH_THRESHOLD=40`.
+- Persistence: descriptor/keypoint diserialisasi sebagai SQLite **BLOB** pada
+  volume Docker `matcher-data`; frame PGM tidak disimpan.
+- Format BLOB: `sigfm-sift` v1, bukan ISO/IEC 19794-2. Jangan memberi label ISO
+  sebelum memakai extractor yang benar-benar dapat mengekspor minutiae ISO.
 
-| SENSOR_DPI | self-match score |
-|---|---|
-| 500 (default awal — salah) | **0** (nol minutiae) |
-| 200 | 41.9 |
-| 180 | 69.5 |
-| **150 (default sekarang)** | **711.6** |
-| 120 | 1178 |
+Endpoint matcher: `POST /enroll`, `POST /enroll-tap`, `POST /verify`,
+`GET /health`, dan `GET /diagnostics/member?memberId=...`.
 
-Default = **150** (`SENSOR_DPI` env). DPI terlalu rendah berisiko memunculkan
-minutiae dari noise → naikkan FAR. Nilai final **wajib dikalibrasi di hardware**
-dengan pasangan same-finger/different-press dan different-finger.
-
-> Verifikasi yang sudah dilakukan (satu capture asli): print sama → match
-> (711.6 ≥ 40) ✓, gambar kosong → tolak (0) ✓, restart → cache kosong ✓.
-> Akurasi same-finger/different-press BELUM diuji (butuh device + banyak capture).
-
-Citra parsial → utamakan verifikasi **1:1** setelah identitas dari e-KTP/kartu,
-dan gunakan **multi-template** (enroll beberapa posisi) untuk menaikkan akurasi.
+> Matcher ini untuk pengujian interoperabilitas CS9711. Evaluasi FAR/FRR dengan
+> beberapa orang dan gunakan enkripsi template sebelum dipakai pada produksi.
 
 ### Teknik capture (dari guidebook device)
 

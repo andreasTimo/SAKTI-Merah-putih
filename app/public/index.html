@@ -92,7 +92,7 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      let cfg = { bioMode: 'mock', target: 8 };
+      let cfg = { bioMode: 'mock', target: 15, captureTransport: 'server-proxy', localAgentUrl: null };
       let current = null; // last registered member (for enroll)
       let resolved = null; // resolved member for verify
 
@@ -104,15 +104,20 @@
         ctx.putImageData(img, 0, 0);
       }
       const post = (u, b) => fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
+      function agentUrl(route) {
+        return cfg.captureTransport === 'browser-local'
+          ? cfg.localAgentUrl + route
+          : '/api' + route;
+      }
       async function captureTap() {
-        const r = await fetch('/api/capture-tap', { method: 'POST' }).then((x) => x.json());
+        const r = await fetch(agentUrl('/capture-tap'), { method: 'POST' }).then((x) => x.json());
         if (r.ok === false || r.error) throw new Error(r.error || 'tap gagal');
         if (r.frame) draw(r.frame);
         return r;
       }
 
       async function health() {
-        try { const a = await fetch('/api/health').then((r) => r.json());
+        try { const a = await fetch(agentUrl('/health')).then((r) => r.json());
           $('dotAgent').className = 'dot ' + (a.devicePresent ? 'on' : 'off');
           $('agentStatus').textContent = a.devicePresent ? 'Sensor siap' : 'Sensor belum terpasang';
         } catch { $('dotAgent').className = 'dot off'; $('agentStatus').textContent = 'Agent native mati'; }
@@ -157,7 +162,10 @@
             const r = await post('/api/enroll-tap', { memberId, image: cap.frame });
             if (r.ok === false) continue;
             $('enrollBar').style.width = Math.min(100, (r.templatesTotal / r.target) * 100) + '%';
-            $('regOut').textContent = (r.accepted ? '✓ Area baru' : '↺ Sudah ada, geser') + ` — ${r.templatesTotal}/${r.target} (skor ${r.bestScore.toFixed(0)})`;
+            const signal = Number.isFinite(r.keypoints)
+              ? `${r.keypoints} keypoint SIGFM`
+              : (Number.isFinite(r.bestScore) ? `skor ${r.bestScore.toFixed(0)}` : 'capture diterima');
+            $('regOut').textContent = `✓ Capture diterima — ${r.templatesTotal}/${r.target} (${signal})`;
             if (r.coverageComplete) { enrolling = false; markEnrolled(); break; }
             await new Promise((s) => setTimeout(s, 300));
           }
@@ -211,7 +219,9 @@
           $('modeNote').textContent = 'Mode MOCK: flow diuji tanpa sensor. Enroll = simulasi; verifikasi pakai toggle "simulasi jari salah".';
           $('wrapWrong').style.display = 'inline-flex';
         } else {
-          $('modeNote').textContent = 'Mode REAL: pakai sensor CS9711 (agent) + matcher SourceAFIS.';
+          $('modeNote').textContent = cfg.captureTransport === 'browser-local'
+            ? 'Mode REAL Cloud: browser terhubung ke agent CS9711 lokal; enrollment membutuhkan 15 capture.'
+            : 'Mode REAL: CS9711 + matcher SIGFM; enrollment membutuhkan 15 capture.';
         }
         health(); setInterval(health, 4000);
       })();

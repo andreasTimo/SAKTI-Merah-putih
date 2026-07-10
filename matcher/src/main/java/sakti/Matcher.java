@@ -20,6 +20,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,10 +29,8 @@ import java.util.concurrent.Executors;
 /**
  * SAKTI fingerprint matcher — SourceAFIS 1:1 verification.
  *
- * Storage is IN-MEMORY only (a ConcurrentHashMap). There is no disk or DB
- * persistence, so every enrolled template is erased when this process stops —
- * exactly the "local cache, cleared when the app dies" behaviour requested for
- * the testing phase. A real database design lands in a later task.
+ * Matching stays in memory for speed, while serialized SourceAFIS templates are
+ * persisted as SQLite BLOBs. Raw fingerprint images are never persisted.
  */
 public class Matcher {
     static final Gson GSON = new Gson();
@@ -49,18 +48,30 @@ public class Matcher {
 
     // memberId -> list of enrolled templates (multi-template). Ephemeral.
     static final Map<String, List<FingerprintTemplate>> STORE = new ConcurrentHashMap<>();
+    static TemplateStore TEMPLATE_STORE;
 
     public static void main(String[] args) throws IOException {
+        TEMPLATE_STORE = TemplateStore.openFromEnv();
+        try {
+            for (Map.Entry<String, List<byte[]>> entry : TEMPLATE_STORE.loadAll().entrySet()) {
+                List<FingerprintTemplate> templates = new ArrayList<>();
+                for (byte[] bytes : entry.getValue()) templates.add(new FingerprintTemplate(bytes));
+                STORE.put(entry.getKey(), templates);
+            }
+        } catch (Exception e) {
+            throw new IOException("cannot load biometric templates: " + e.getMessage(), e);
+        }
         int port = (int) envDouble("MATCHER_PORT", 8090);
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
         server.createContext("/health", Matcher::health);
         server.createContext("/enroll", Matcher::enroll);
         server.createContext("/enroll-tap", Matcher::enrollTap);
         server.createContext("/verify", Matcher::verify);
+        server.createContext("/diagnostics/member", Matcher::memberDiagnostics);
         server.setExecutor(Executors.newFixedThreadPool(4));
         server.start();
         System.out.println("[matcher] SourceAFIS 1:1 matcher on :" + port
-                + " (in-memory/ephemeral, threshold " + DEFAULT_THRESHOLD + ", dpi " + SENSOR_DPI + ")");
+                + " (SQLite template BLOBs, threshold " + DEFAULT_THRESHOLD + ", dpi " + SENSOR_DPI + ")");
     }
 
     static void health(HttpExchange ex) throws IOException {
@@ -68,7 +79,9 @@ public class Matcher {
         for (List<FingerprintTemplate> v : STORE.values()) totalTemplates += v.size();
         JsonObject o = new JsonObject();
         o.addProperty("service", "sakti-matcher");
-        o.addProperty("storage", "in-memory (ephemeral)");
+        o.addProperty("storage", "SQLite BLOB (persistent testing storage)");
+        o.addProperty("templateFormat", TemplateStore.FORMAT);
+        o.addProperty("templateFormatVersion", TemplateStore.FORMAT_VERSION);
         o.addProperty("threshold", DEFAULT_THRESHOLD);
         o.addProperty("enrolledMembers", STORE.size());
         o.addProperty("totalTemplates", totalTemplates);
@@ -90,15 +103,19 @@ public class Matcher {
             for (JsonElement el : images) {
                 templates.add(templateFrom(Base64.getDecoder().decode(el.getAsString())));
             }
-            STORE.merge(memberId, templates, (existing, added) -> {
-                existing.addAll(added);
-                return existing;
-            });
+            List<FingerprintTemplate> stored = STORE.computeIfAbsent(memberId, k -> new ArrayList<>());
+            synchronized (stored) {
+                int start = stored.size();
+                for (int i = 0; i < templates.size(); i++) {
+                    TEMPLATE_STORE.append(memberId, start + i, templates.get(i).toByteArray());
+                    stored.add(templates.get(i));
+                }
+            }
             JsonObject o = new JsonObject();
             o.addProperty("ok", true);
             o.addProperty("memberId", memberId);
             o.addProperty("templatesAdded", templates.size());
-            o.addProperty("templatesTotal", STORE.get(memberId).size());
+            o.addProperty("templatesTotal", stored.size());
             send(ex, 200, o);
         } catch (Exception e) {
             send(ex, 500, err(e.getMessage()));
@@ -121,12 +138,20 @@ public class Matcher {
             List<FingerprintTemplate> areas = STORE.computeIfAbsent(memberId, k -> new ArrayList<>());
 
             double best = 0.0;
-            if (!areas.isEmpty()) {
-                FingerprintMatcher matcher = new FingerprintMatcher(probe);
-                for (FingerprintTemplate a : areas) best = Math.max(best, matcher.match(a));
+            boolean redundant;
+            int total;
+            synchronized (areas) {
+                if (!areas.isEmpty()) {
+                    FingerprintMatcher matcher = new FingerprintMatcher(probe);
+                    for (FingerprintTemplate a : areas) best = Math.max(best, matcher.match(a));
+                }
+                redundant = !areas.isEmpty() && best >= REDUNDANT_SCORE;
+                if (!redundant) {
+                    TEMPLATE_STORE.append(memberId, areas.size(), probe.toByteArray());
+                    areas.add(probe);
+                }
+                total = areas.size();
             }
-            boolean redundant = !areas.isEmpty() && best >= REDUNDANT_SCORE;
-            if (!redundant) areas.add(probe);
 
             JsonObject o = new JsonObject();
             o.addProperty("ok", true);
@@ -134,9 +159,9 @@ public class Matcher {
             o.addProperty("accepted", !redundant);
             o.addProperty("reason", redundant ? "redundant" : "new-area");
             o.addProperty("bestScore", best);
-            o.addProperty("templatesTotal", areas.size());
+            o.addProperty("templatesTotal", total);
             o.addProperty("target", TARGET_AREAS);
-            o.addProperty("coverageComplete", areas.size() >= TARGET_AREAS);
+            o.addProperty("coverageComplete", total >= TARGET_AREAS);
             send(ex, 200, o);
         } catch (Exception e) {
             send(ex, 500, err(e.getMessage()));
@@ -179,6 +204,38 @@ public class Matcher {
         }
     }
 
+    // Read-only calibration summary. It deliberately returns aggregate scores only,
+    // never raw frames, minutiae, or serialized templates.
+    static void memberDiagnostics(HttpExchange ex) throws IOException {
+        if (!"GET".equals(ex.getRequestMethod())) { send(ex, 405, err("GET only")); return; }
+        String memberId = queryParam(ex, "memberId");
+        List<FingerprintTemplate> templates = STORE.get(memberId);
+        if (memberId == null || memberId.isBlank()) { send(ex, 400, err("memberId required")); return; }
+        if (templates == null) { send(ex, 404, err("member not enrolled: " + memberId)); return; }
+
+        List<Double> scores = new ArrayList<>();
+        synchronized (templates) {
+            for (int i = 0; i < templates.size(); i++) {
+                FingerprintMatcher matcher = new FingerprintMatcher(templates.get(i));
+                for (int j = i + 1; j < templates.size(); j++) scores.add(matcher.match(templates.get(j)));
+            }
+        }
+        Collections.sort(scores);
+        int acceptedPairs = 0;
+        for (double score : scores) if (score >= DEFAULT_THRESHOLD) acceptedPairs++;
+
+        JsonObject o = new JsonObject();
+        o.addProperty("ok", true);
+        o.addProperty("memberId", memberId);
+        o.addProperty("templates", templates.size());
+        o.addProperty("pairs", scores.size());
+        o.addProperty("threshold", DEFAULT_THRESHOLD);
+        o.addProperty("pairsAtThreshold", acceptedPairs);
+        o.addProperty("bestPairScore", scores.isEmpty() ? 0.0 : scores.get(scores.size() - 1));
+        o.addProperty("medianPairScore", scores.isEmpty() ? 0.0 : scores.get(scores.size() / 2));
+        send(ex, 200, o);
+    }
+
     // Accept either "image" (single base64 PGM) or "images":[...] (a swipe burst).
     static List<byte[]> imagesFrom(JsonObject body) {
         List<byte[]> out = new ArrayList<>();
@@ -211,6 +268,18 @@ public class Matcher {
 
     static String optString(JsonObject o, String k) {
         return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : null;
+    }
+
+    static String queryParam(HttpExchange ex, String key) {
+        String query = ex.getRequestURI().getRawQuery();
+        if (query == null) return null;
+        for (String entry : query.split("&")) {
+            String[] pair = entry.split("=", 2);
+            if (pair.length == 2 && key.equals(pair[0])) {
+                return java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 
     static JsonObject err(String msg) {

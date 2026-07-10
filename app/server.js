@@ -12,7 +12,9 @@ const PORT = Number(process.env.PORT) || 8080;
 const AGENT_URL = process.env.AGENT_URL || 'http://host.docker.internal:7373';
 const MATCHER_URL = process.env.MATCHER_URL || 'http://matcher:8090';
 const BIO_MODE = process.env.BIO_MODE === 'real' ? 'real' : 'mock';
-const TARGET_AREAS = Number(process.env.TARGET_AREAS) || 8;
+const TARGET_AREAS = Number(process.env.TARGET_AREAS) || 15;
+const CAPTURE_TRANSPORT = process.env.CAPTURE_TRANSPORT === 'browser-local' ? 'browser-local' : 'server-proxy';
+const LOCAL_AGENT_URL = (process.env.LOCAL_AGENT_URL || 'http://127.0.0.1:7373').replace(/\/$/, '');
 
 const INDEX = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
 
@@ -62,9 +64,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- config & health ----
-  if (url === '/api/config') return json(res, 200, { bioMode: BIO_MODE, target: TARGET_AREAS });
+  if (url === '/api/config') {
+    return json(res, 200, {
+      bioMode: BIO_MODE,
+      target: TARGET_AREAS,
+      captureTransport: CAPTURE_TRANSPORT,
+      localAgentUrl: CAPTURE_TRANSPORT === 'browser-local' ? LOCAL_AGENT_URL : null,
+    });
+  }
   if (url === '/api/health') return forward(res, `${AGENT_URL}/health`, 'GET');
   if (url === '/api/matcher-health') return forward(res, `${MATCHER_URL}/health`, 'GET');
+  if (url.startsWith('/api/biometric-diagnostics?') && method === 'GET') {
+    return forward(res, `${MATCHER_URL}/diagnostics/member?${url.split('?')[1]}`, 'GET');
+  }
 
   // ---- member registry ----
   if (url === '/api/members' && method === 'GET') {
@@ -97,7 +109,24 @@ const server = http.createServer(async (req, res) => {
   // ---- biometric enroll/verify (real -> matcher, mock -> simulated) ----
   if (url === '/api/enroll-tap' && method === 'POST') {
     const raw = await readBody(req);
-    return forward(res, `${MATCHER_URL}/enroll-tap`, 'POST', raw);
+    try {
+      const upstream = await fetch(`${MATCHER_URL}/enroll-tap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: raw,
+      });
+      const text = await upstream.text();
+      let enrollment;
+      try { enrollment = JSON.parse(text); } catch { enrollment = null; }
+      if (upstream.ok && enrollment && enrollment.coverageComplete) {
+        const rec = members.get(enrollment.memberId);
+        if (rec) rec.enrolled = true;
+      }
+      res.writeHead(upstream.status, { 'Content-Type': 'application/json' });
+      return res.end(text);
+    } catch (e) {
+      return json(res, 502, { error: 'upstream unreachable', detail: e.message, url: `${MATCHER_URL}/enroll-tap` });
+    }
   }
   if (url === '/api/verify' && method === 'POST') {
     const raw = await readBody(req);

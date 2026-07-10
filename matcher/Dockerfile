@@ -1,13 +1,10 @@
-# Build the SourceAFIS matcher (runs unit tests during package) then ship a slim JRE image.
-FROM maven:3.9-eclipse-temurin-17 AS build
-WORKDIR /build
-COPY pom.xml .
-RUN mvn -q -B dependency:go-offline || true
-COPY src ./src
-RUN mvn -q -B package
+FROM python:3.12-slim
 
-FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /build/target/matcher.jar ./matcher.jar
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY sigfm_matcher.py test_sigfm_matcher.py ./
+RUN python -m unittest -v test_sigfm_matcher.py
+
 EXPOSE 8090
-CMD ["java", "-jar", "matcher.jar"]
+CMD ["python", "sigfm_matcher.py"]

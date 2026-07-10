@@ -6,12 +6,17 @@ registrasi anggota koperasi berbasis **e-KTP (NFC)** + **biometrik sidik jari**.
 Repo ini berisi **Task 1: setup fingerprint** untuk sensor **CS9711 (ChipSailing,
 USB `0x2541:0x0236`)** yang jalan di **Windows dan macOS** tanpa SDK vendor.
 
+> **Cloud Run:** Cloud Run dapat menjalankan web/API dan matcher, tetapi tidak
+> dapat mengakses USB CS9711. Agent tetap wajib berjalan native pada PC petugas.
+> Lihat [`docs/CLOUD_RUN.md`](docs/CLOUD_RUN.md) untuk arsitektur browser-local,
+> konfigurasi Windows, dan gap persistence produksi.
+
 ## Arsitektur (kenapa bukan "semua di Docker")
 
 ```
 ┌───────────────────────────────┐
 │  agent/  — NATIVE (libusb)     │  wajib native di PC petugas.
-│  capture CS9711 → gambar 68×118│  Docker TIDAK bisa passthrough USB
+│  capture CS9711 → PGM 68×118   │  Docker TIDAK bisa passthrough USB
 │  http://127.0.0.1:7373         │  di Windows/macOS.
 └───────────────┬───────────────┘
                 │ localhost HTTP
@@ -65,6 +70,11 @@ npm run app        # Terminal 2: docker compose up --build  → http://localhost
 
 Buka `http://localhost:8080`, status agent tampil, klik **Rekam Sidik Jari**.
 
+Di Windows, jalankan dari checkout bersih yang dependency-nya diinstal pada
+Windows itu sendiri: `npm ci`, `npm run setup`, `npm run doctor`, lalu
+`npm run agent`. Script agent melakukan preflight `node-usb`, WinUSB, dan
+indikator Windows Biometric Service sebelum bridge dimulai.
+
 ## Struktur
 
 | Path | Isi |
@@ -75,9 +85,24 @@ Buka `http://localhost:8080`, status agent tampil, klik **Rekam Sidik Jari**.
 | `docs/` | Referensi protokol CS9711 & matriks lintas-OS. |
 | `captures/` | Output gambar & laporan proof (git-ignored — data biometrik). |
 
+## Matching CS9711
+
+CS9711 mengirim citra partial `68×118`. Matcher aktif adalah **SIGFM** yang
+mengikuti pendekatan driver `archeYR/libfprint-CS9711`: OpenCV SIFT descriptor,
+ratio matching, dan pemeriksaan konsistensi geometri. Enrollment membutuhkan
+**15** capture; setiap capture menghasilkan template descriptor, bukan citra.
+
+Template SIGFM diserialisasi ke SQLite BLOB pada Docker volume `matcher-data`.
+Ini format internal `sigfm-sift` v1, **bukan ISO/IEC 19794-2**. Standar ISO dapat
+ditambahkan hanya bila extractor yang dipakai benar-benar menghasilkan record
+minutiae ISO. SourceAFIS Java tetap berada di `matcher/src/` sebagai referensi
+legacy, tetapi bukan service matcher yang dibangun Docker.
+
 ## Keamanan
 
 Gambar/template sidik jari = data biometrik sensitif (UU PDP No. 27/2022).
-`captures/` di-git-ignore. Untuk produksi: simpan **template terenkripsi**, bukan
-gambar mentah; jadikan sidik jari verifikasi **1:1** setelah e-KTP/kartu, bukan
-identifikasi 1:N murni (citra parsial 68×118 → risiko false-accept).
+`captures/` di-git-ignore. Untuk testing, matcher menyimpan descriptor SIGFM
+sebagai SQLite **BLOB** dalam volume Docker `matcher-data`; gambar mentah tidak
+disimpan. Database testing ini belum dienkripsi. Untuk produksi, gunakan enkripsi
+kolom/volume yang dikelola kunci dan jadikan sidik jari verifikasi **1:1** setelah
+e-KTP/kartu, bukan identifikasi 1:N murni.

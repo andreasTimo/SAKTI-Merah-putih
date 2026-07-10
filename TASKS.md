@@ -29,36 +29,31 @@
   `set_configuration` sebelum claim, short-poll read 300ms (deadline 10s), read 8000+**24**
   (bukan 8000+8000), deteksi timeout `LIBUSB_TRANSFER_TIMED_OUT` di-retry (bukan fatal).
 
-## 🔨 Task 2 — Verifikasi 1:1 (SourceAFIS, cache in-memory)
+## 🔨 Task 2 — Verifikasi 1:1 (SIGFM, SQLite BLOB)
 
-**Keputusan desain (brainstorming):** matcher = SourceAFIS (template minutiae =
-"vektor"); enroll = multi-template (5–8 capture/"slide"); storage = **in-memory
-ephemeral** (hilang saat app mati) untuk fase pengetesan — DB design menyusul.
-Embedding/Gemini ditolak untuk sekarang (lihat catatan Future).
+**Keputusan desain (revisi):** matcher = SIGFM/OpenCV SIFT untuk citra partial
+CS9711; enroll = 15 tahap; storage = SQLite **BLOB** persistence untuk testing.
+SourceAFIS tidak dipakai oleh service aktif karena gagal stabil pada pergeseran
+capture CS9711 kecil. Embedding/Gemini tetap tidak dipakai.
 
-- [x] `matcher/` service Java SourceAFIS 3.18.1, `POST /enroll` + `POST /verify` (1:1), `GET /health`
-- [x] Storage in-memory (`ConcurrentHashMap`) — restart = data terhapus
-- [x] Multi-template: skor = max over template member, threshold 40 (env `MATCH_THRESHOLD`)
-- [x] Parser PGM (P5) → `FingerprintImage` dpi 500 → `FingerprintTemplate`
-- [x] Unit test (JUnit): parse PGM, roundtrip template, integrasi real-print (gated `FP_SAMPLE`)
+- [x] `matcher/` service SIGFM/OpenCV, `POST /enroll` + `POST /verify` (1:1), `GET /health`
+- [x] SQLite BLOB persistence; raw PGM tidak disimpan
+- [x] Multi-template: skor SIGFM tertinggi, threshold 40 (env `MATCH_THRESHOLD`)
+- [x] Parser PGM (P5) → SIFT keypoint/descriptor → serialized BLOB
+- [x] Unit test: BLOB round-trip + SQLite persistence
 - [x] App: proxy `/api/enroll`, `/api/verify`, `/api/capture-burst`; UI Enroll + Verifikasi 1:1
 - [x] **Swipe/burst capture** (`/capture-burst`): rekam banyak frame, pilih yang
       **tajam** (quality-first) — buang frame kosong & motion-blur. Verify juga burst.
 - [x] **Fix seleksi frame** (feedback user + guidebook): dulu filter by-gerakan →
       swipe pelan cuma 1 frame, swipe cepat blur/0 minutiae. Sekarang gate std +
       sharpness (kalibrasi: bagus ~17, blur ~6.6), knob env `MIN_STD/MIN_SHARP/MAX_FRAMES/BURST_MS`.
-- [x] **Enroll gaya Touch ID (tap-coverage)**: `/capture-tap` (1 frame tertajam per tap) +
-      matcher `/enroll-tap` — simpan hanya area BARU (overlap < `REDUNDANT_SCORE`=60),
-      progress ke `TARGET_AREAS`=8, deteksi "sudah ada" vs "area baru". UI: loop tap +
-      progress bar. Verify = 1 tap. Terverifikasi: tap sama→redundant, verify→match.
-      Catatan: label "ujung vs tengah" absolut TIDAK dibuat (butuh core-detection); pakai
-      panduan relative coverage. Embedding TIDAK diperlukan untuk ini (tetap upgrade masa depan).
+- [x] **Enroll 15 tahap gaya libfprint**: `/capture-tap` menyimpan satu descriptor
+      berkualitas per tahap sampai `TARGET_AREAS`=15; UI menunjukkan progress.
 - [x] `docker-compose`: service `matcher` + app `depends_on`
-- [x] **Kalibrasi DPI**: CS9711 68×118 butuh `SENSOR_DPI=150` (500 → 0 minutiae). Default di-set 150.
-- [x] Smoke test (capture asli): same→match 711.6 ✓, blank→tolak 0 ✓, restart→cache kosong ✓
+- [x] Diagnostik: `GET /diagnostics/member` menampilkan statistik skor tanpa frame/template.
 - [ ] Verifikasi hardware same-finger/different-press + different-finger (FAR/FRR) — butuh device
 - [ ] 1:N identification (task lanjutan)
-- [ ] Enkripsi template + DB persisten (task lanjutan, saat DB design)
+- [ ] Enkripsi template database testing sebelum produksi
 
 **Future — embedding lokal (bukan sekarang):** upgrade ke fixed-length embedding
 (gaya DeepPrint) + pgvector untuk 1:N skala besar. Bukan Gemini (API teks, bukan

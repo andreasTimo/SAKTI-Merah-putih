@@ -11,7 +11,10 @@
     "setup": "node scripts/setup.js",
     "doctor": "node agent/src/doctor.js",
     "proof": "node agent/src/doctor.js --capture",
-    "agent": "node agent/src/server.js",
+    "agent": "node scripts/start-agent.js",
+    "agent:windows": "node scripts/start-agent.js",
+    "agent:loop-verify": "node scripts/agent-loop-verify.js",
+    "agent:motion-step": "node scripts/agent-motion-step.js",
     "app": "docker compose up --build",
     "app:down": "docker compose down"
   },
