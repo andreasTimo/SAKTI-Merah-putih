@@ -75,6 +75,11 @@ Windows itu sendiri: `npm ci`, `npm run setup`, `npm run doctor`, lalu
 `npm run agent`. Script agent melakukan preflight `node-usb`, WinUSB, dan
 indikator Windows Biometric Service sebelum bridge dimulai.
 
+Hasil validasi hardware Windows tersedia di
+[`docs/WINDOWS_VALIDATION.md`](docs/WINDOWS_VALIDATION.md). Agent harus
+dijalankan satu kali dari terminal Administrator dan dibiarkan hidup selama
+web app digunakan.
+
 ## Struktur
 
 | Path | Isi |

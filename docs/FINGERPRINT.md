@@ -66,6 +66,9 @@ di-Docker.
 dan jangan salin `node_modules` dari OS lain. Untuk deployment Cloud Run, lihat
 [`CLOUD_RUN.md`](CLOUD_RUN.md): Cloud Run tidak dapat mengakses USB sensor.
 
+Validasi nyata Windows, termasuk `PROOF: PASS`, capture tap elevated, dan
+diagnosis agent stale/non-elevated, dicatat di [`WINDOWS_VALIDATION.md`](WINDOWS_VALIDATION.md).
+
 ## Matching — SIGFM 1:1
 
 CS9711 mengirim citra partial `68×118`. Pengujian menunjukkan SourceAFIS tidak
