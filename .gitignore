@@ -44,5 +44,5 @@ docker-compose.override.yml
 # Claude Code local settings
 .claude/settings.local.json
 
-# graphify generated output (machine-specific paths)
+# graphify generated knowledge-graph output (has machine-specific paths)
 graphify-out/
