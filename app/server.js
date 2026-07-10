@@ -48,10 +48,12 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/health') return forward(res, `${AGENT_URL}/health`, 'GET');
   if (url === '/api/capture' && method === 'POST') return forward(res, `${AGENT_URL}/capture`, 'POST');
   if (url === '/api/capture-burst' && method === 'POST') return forward(res, `${AGENT_URL}/capture-burst`, 'POST');
+  if (url === '/api/capture-tap' && method === 'POST') return forward(res, `${AGENT_URL}/capture-tap`, 'POST');
 
   // Matching service
   if (url === '/api/matcher-health') return forward(res, `${MATCHER_URL}/health`, 'GET');
   if (url === '/api/enroll' && method === 'POST') return forward(res, `${MATCHER_URL}/enroll`, 'POST', await readBody(req));
+  if (url === '/api/enroll-tap' && method === 'POST') return forward(res, `${MATCHER_URL}/enroll-tap`, 'POST', await readBody(req));
   if (url === '/api/verify' && method === 'POST') return forward(res, `${MATCHER_URL}/verify`, 'POST', await readBody(req));
 
   res.writeHead(404);

@@ -47,6 +47,12 @@ Embedding/Gemini ditolak untuk sekarang (lihat catatan Future).
 - [x] **Fix seleksi frame** (feedback user + guidebook): dulu filter by-gerakan →
       swipe pelan cuma 1 frame, swipe cepat blur/0 minutiae. Sekarang gate std +
       sharpness (kalibrasi: bagus ~17, blur ~6.6), knob env `MIN_STD/MIN_SHARP/MAX_FRAMES/BURST_MS`.
+- [x] **Enroll gaya Touch ID (tap-coverage)**: `/capture-tap` (1 frame tertajam per tap) +
+      matcher `/enroll-tap` — simpan hanya area BARU (overlap < `REDUNDANT_SCORE`=60),
+      progress ke `TARGET_AREAS`=8, deteksi "sudah ada" vs "area baru". UI: loop tap +
+      progress bar. Verify = 1 tap. Terverifikasi: tap sama→redundant, verify→match.
+      Catatan: label "ujung vs tengah" absolut TIDAK dibuat (butuh core-detection); pakai
+      panduan relative coverage. Embedding TIDAK diperlukan untuk ini (tetap upgrade masa depan).
 - [x] `docker-compose`: service `matcher` + app `depends_on`
 - [x] **Kalibrasi DPI**: CS9711 68×118 butuh `SENSOR_DPI=150` (500 → 0 minutiae). Default di-set 150.
 - [x] Smoke test (capture asli): same→match 711.6 ✓, blank→tolak 0 ✓, restart→cache kosong ✓

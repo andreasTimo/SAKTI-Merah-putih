@@ -90,9 +90,33 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Single tap: a short burst, returns only the sharpest frame. For Touch-ID
+  // style guided enrollment where the operator taps repeatedly.
+  if (req.method === 'POST' && req.url === '/capture-tap') {
+    try {
+      const tapMs = Number(process.env.TAP_MS) || 2000;
+      const { raws } = await device.captureBurst({ durationMs: tapMs, maxFrames: 20 });
+      const grays = raws.map(remap);
+      const best = selectBestFrames(grays, {
+        minStd: BURST.minStd,
+        minSharp: BURST.minSharp,
+        maxFrames: 1,
+      });
+      return send(res, 200, {
+        ok: true,
+        rawFrames: grays.length,
+        captured: best.length,
+        frame: best.length ? toPGM(best[0].g).toString('base64') : null,
+        quality: best.length ? { std: best[0].std, sharp: +best[0].sharp.toFixed(1) } : null,
+      });
+    } catch (e) {
+      return send(res, 500, { ok: false, error: e.message });
+    }
+  }
+
   return send(res, 404, {
     error: 'not found',
-    routes: ['GET /health', 'POST /capture', 'POST /capture-burst'],
+    routes: ['GET /health', 'POST /capture', 'POST /capture-burst', 'POST /capture-tap'],
   });
 });
 

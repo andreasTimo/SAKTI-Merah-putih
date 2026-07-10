@@ -41,6 +41,12 @@ public class Matcher {
     // ~150 extracts rich minutiae; 500 finds none. Calibrate per sensor on hardware.
     static final int SENSOR_DPI = (int) envDouble("SENSOR_DPI", 150);
 
+    // Touch-ID-style guided enrollment: a tap that already scores >= REDUNDANT_SCORE
+    // against an enrolled area is "already covered"; enrollment is complete once
+    // TARGET_AREAS distinct areas are stored.
+    static final double REDUNDANT_SCORE = envDouble("REDUNDANT_SCORE", 60.0);
+    static final int TARGET_AREAS = (int) envDouble("TARGET_AREAS", 8);
+
     // memberId -> list of enrolled templates (multi-template). Ephemeral.
     static final Map<String, List<FingerprintTemplate>> STORE = new ConcurrentHashMap<>();
 
@@ -49,6 +55,7 @@ public class Matcher {
         HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
         server.createContext("/health", Matcher::health);
         server.createContext("/enroll", Matcher::enroll);
+        server.createContext("/enroll-tap", Matcher::enrollTap);
         server.createContext("/verify", Matcher::verify);
         server.setExecutor(Executors.newFixedThreadPool(4));
         server.start();
@@ -92,6 +99,44 @@ public class Matcher {
             o.addProperty("memberId", memberId);
             o.addProperty("templatesAdded", templates.size());
             o.addProperty("templatesTotal", STORE.get(memberId).size());
+            send(ex, 200, o);
+        } catch (Exception e) {
+            send(ex, 500, err(e.getMessage()));
+        }
+    }
+
+    // POST /enroll-tap { memberId, image }  -> Touch-ID-style guided enrollment.
+    // Stores the tap only if it covers a NEW area (best overlap with existing
+    // templates < REDUNDANT_SCORE). Returns coverage progress + completion.
+    static void enrollTap(HttpExchange ex) throws IOException {
+        if (!"POST".equals(ex.getRequestMethod())) { send(ex, 405, err("POST only")); return; }
+        try {
+            JsonObject body = readJson(ex);
+            String memberId = optString(body, "memberId");
+            if (memberId == null || memberId.isBlank() || !body.has("image")) {
+                send(ex, 400, err("memberId and image required"));
+                return;
+            }
+            FingerprintTemplate probe = templateFrom(Base64.getDecoder().decode(body.get("image").getAsString()));
+            List<FingerprintTemplate> areas = STORE.computeIfAbsent(memberId, k -> new ArrayList<>());
+
+            double best = 0.0;
+            if (!areas.isEmpty()) {
+                FingerprintMatcher matcher = new FingerprintMatcher(probe);
+                for (FingerprintTemplate a : areas) best = Math.max(best, matcher.match(a));
+            }
+            boolean redundant = !areas.isEmpty() && best >= REDUNDANT_SCORE;
+            if (!redundant) areas.add(probe);
+
+            JsonObject o = new JsonObject();
+            o.addProperty("ok", true);
+            o.addProperty("memberId", memberId);
+            o.addProperty("accepted", !redundant);
+            o.addProperty("reason", redundant ? "redundant" : "new-area");
+            o.addProperty("bestScore", best);
+            o.addProperty("templatesTotal", areas.size());
+            o.addProperty("target", TARGET_AREAS);
+            o.addProperty("coverageComplete", areas.size() >= TARGET_AREAS);
             send(ex, 200, o);
         } catch (Exception e) {
             send(ex, 500, err(e.getMessage()));

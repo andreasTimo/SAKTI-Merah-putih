@@ -40,22 +40,26 @@
       </div>
 
       <div class="card">
-        <h2>1. Enroll — GESER jari (swipe)</h2>
+        <h2>1. Enroll — TAP berulang (gaya Touch ID)</h2>
         <div class="row">
           <div><label>Member ID</label><input id="enrollId" placeholder="mis. anggota-001" /></div>
-          <button id="enrollBtn" disabled>Mulai Enroll (geser jari)</button>
+          <button id="enrollBtn" disabled>Mulai Enroll</button>
+          <button id="enrollStop" disabled style="background:#555">Stop</button>
           <canvas id="preview" width="68" height="118"></canvas>
         </div>
-        <small>Teknik benar (dari guidebook): <b>tekan rata & mantap</b>, pusatkan inti sidik jari,
-          <b>jangan digeser cepat</b>. Selama ±5 dtk, angkat–tekan ulang di <b>beberapa posisi</b> berbeda.</small>
+        <div style="height:14px;background:#eee;border-radius:7px;overflow:hidden;margin:12px 0 6px">
+          <div id="enrollBar" style="height:100%;width:0;background:var(--ok);transition:width .2s"></div>
+        </div>
+        <small>Tempel jari (angkat–tap ulang) di <b>posisi berbeda-beda</b>: ujung, tengah, kiri, kanan.
+          Sistem menyimpan tiap <b>area baru</b> sampai penuh. Tekan rata, jangan geser.</small>
         <pre id="enrollOut">–</pre>
       </div>
 
       <div class="card">
-        <h2>2. Verifikasi 1:1 — GESER jari</h2>
+        <h2>2. Verifikasi 1:1 — TAP jari</h2>
         <div class="row">
           <div><label>Member ID</label><input id="verifyId" placeholder="mis. anggota-001" /></div>
-          <button id="verifyBtn" disabled>Verifikasi (geser jari)</button>
+          <button id="verifyBtn" disabled>Verifikasi (tap)</button>
         </div>
         <div id="verdict" class="verdict"></div>
         <pre id="verifyOut">–</pre>
@@ -78,18 +82,13 @@
         ctx.putImageData(img, 0, 0);
       }
 
-      // Swipe: one call captures a burst, agent returns only the sharp frames.
-      async function captureSwipe() {
-        const r = await fetch('/api/capture-burst', { method: 'POST' }).then((x) => x.json());
-        if (r.ok === false || r.error) throw new Error(r.error || 'burst gagal');
-        const frames = r.frames || [];
-        if (frames.length) draw(frames[frames.length - 1]);
-        return r; // { frames, quality, rawFrames, captured }
+      // One tap: short burst, agent returns the single sharpest frame (or null).
+      async function captureTap() {
+        const r = await fetch('/api/capture-tap', { method: 'POST' }).then((x) => x.json());
+        if (r.ok === false || r.error) throw new Error(r.error || 'tap gagal');
+        if (r.frame) draw(r.frame);
+        return r; // { frame, quality, rawFrames, captured }
       }
-      const qualityHint = (r) =>
-        r.rawFrames > r.captured * 2 && r.captured < 3
-          ? ' (banyak frame buram/tak jelas — tekan lebih rata, jangan geser cepat)'
-          : '';
 
       async function health() {
         try {
@@ -102,32 +101,42 @@
           const m = await fetch('/api/matcher-health').then((r) => r.json());
           $('dotMatcher').className = 'dot on';
           $('matcherStatus').textContent = `Matcher OK · ${m.enrolledMembers} member / ${m.totalTemplates} template`;
-          $('enrollBtn').disabled = false; $('verifyBtn').disabled = false;
+          if (!enrolling) { $('enrollBtn').disabled = false; $('verifyBtn').disabled = false; }
         } catch { $('dotMatcher').className = 'dot off'; $('matcherStatus').textContent = 'Matcher mati'; }
       }
 
+      let enrolling = false;
+      $('enrollStop').onclick = () => { enrolling = false; };
       $('enrollBtn').onclick = async () => {
         const memberId = $('enrollId').value.trim();
         if (!memberId) { $('enrollOut').textContent = 'Isi Member ID dulu.'; return; }
-        $('enrollBtn').disabled = true;
+        enrolling = true;
+        $('enrollBtn').disabled = true; $('enrollStop').disabled = false;
+        $('enrollBar').style.width = '0';
+        let last = null;
         try {
-          $('enrollOut').textContent = 'Tekan rata & mantap di beberapa posisi (±5 detik)…';
-          const cap = await captureSwipe();
-          const images = cap.frames;
-          if (images.length < 2) {
-            $('enrollOut').textContent =
-              `Hanya ${images.length} frame jelas dari ${cap.rawFrames} rekaman${qualityHint(cap)}. ` +
-              `Tekan rata, pusatkan inti sidik jari, ulangi di beberapa posisi.`;
-            $('enrollBtn').disabled = false; return;
+          while (enrolling) {
+            $('enrollOut').textContent = 'Tap jari di posisi berbeda…' + (last ? `\n${last}` : '');
+            const cap = await captureTap();
+            if (!cap.frame) continue; // no finger this window — keep waiting
+            const r = await fetch('/api/enroll-tap', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ memberId, image: cap.frame }),
+            }).then((x) => x.json());
+            if (r.ok === false) { last = 'Gagal: ' + r.error; continue; }
+            $('enrollBar').style.width = Math.min(100, (r.templatesTotal / r.target) * 100) + '%';
+            last = (r.accepted ? `✓ Area baru` : `↺ Sudah ada (geser ke posisi lain)`) +
+              ` — ${r.templatesTotal}/${r.target} area (skor ${r.bestScore.toFixed(0)})`;
+            if (r.coverageComplete) {
+              enrolling = false;
+              $('enrollOut').textContent = `✅ Enroll selesai — ${r.templatesTotal} area tersimpan.`;
+              break;
+            }
+            await new Promise((s) => setTimeout(s, 350)); // brief pause between taps
           }
-          $('enrollOut').textContent = `Menyimpan ${images.length} template (dari ${cap.rawFrames} frame)…`;
-          const r = await fetch('/api/enroll', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ memberId, images }),
-          }).then((x) => x.json());
-          $('enrollOut').textContent = JSON.stringify({ ...r, quality: cap.quality }, null, 2);
         } catch (e) { $('enrollOut').textContent = 'Gagal: ' + e.message; }
-        $('enrollBtn').disabled = false; health();
+        enrolling = false;
+        $('enrollBtn').disabled = false; $('enrollStop').disabled = true; health();
       };
 
       $('verifyBtn').onclick = async () => {
@@ -135,13 +144,12 @@
         if (!memberId) { $('verifyOut').textContent = 'Isi Member ID dulu.'; return; }
         $('verifyBtn').disabled = true; $('verdict').textContent = ''; $('verdict').className = 'verdict';
         try {
-          $('verifyOut').textContent = 'Tekan rata & mantap untuk verifikasi (±5 detik)…';
-          const cap = await captureSwipe();
-          const images = cap.frames;
-          if (images.length === 0) throw new Error(`tidak ada frame jelas dari ${cap.rawFrames} rekaman — tekan lebih rata`);
+          $('verifyOut').textContent = 'Tap jari untuk verifikasi…';
+          const cap = await captureTap();
+          if (!cap.frame) throw new Error(`tidak ada frame jelas dari ${cap.rawFrames} rekaman — tekan lebih rata`);
           const r = await fetch('/api/verify', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ memberId, images }),
+            body: JSON.stringify({ memberId, image: cap.frame }),
           }).then((x) => x.json());
           $('verifyOut').textContent = JSON.stringify(r, null, 2);
           if (r.ok) {
