@@ -46,7 +46,8 @@
           <button id="enrollBtn" disabled>Mulai Enroll (geser jari)</button>
           <canvas id="preview" width="68" height="118"></canvas>
         </div>
-        <small>Tempel lalu <b>geser</b> jari perlahan di sensor selama ±4 detik — sistem merekam banyak frame berbeda-posisi.</small>
+        <small>Teknik benar (dari guidebook): <b>tekan rata & mantap</b>, pusatkan inti sidik jari,
+          <b>jangan digeser cepat</b>. Selama ±5 dtk, angkat–tekan ulang di <b>beberapa posisi</b> berbeda.</small>
         <pre id="enrollOut">–</pre>
       </div>
 
@@ -77,14 +78,18 @@
         ctx.putImageData(img, 0, 0);
       }
 
-      // Swipe: one call captures a burst of distinct frames while the finger slides.
+      // Swipe: one call captures a burst, agent returns only the sharp frames.
       async function captureSwipe() {
         const r = await fetch('/api/capture-burst', { method: 'POST' }).then((x) => x.json());
         if (r.ok === false || r.error) throw new Error(r.error || 'burst gagal');
         const frames = r.frames || [];
         if (frames.length) draw(frames[frames.length - 1]);
-        return frames;
+        return r; // { frames, quality, rawFrames, captured }
       }
+      const qualityHint = (r) =>
+        r.rawFrames > r.captured * 2 && r.captured < 3
+          ? ' (banyak frame buram/tak jelas — tekan lebih rata, jangan geser cepat)'
+          : '';
 
       async function health() {
         try {
@@ -106,18 +111,21 @@
         if (!memberId) { $('enrollOut').textContent = 'Isi Member ID dulu.'; return; }
         $('enrollBtn').disabled = true;
         try {
-          $('enrollOut').textContent = 'GESER jari perlahan di sensor (±4 detik)…';
-          const images = await captureSwipe();
+          $('enrollOut').textContent = 'Tekan rata & mantap di beberapa posisi (±5 detik)…';
+          const cap = await captureSwipe();
+          const images = cap.frames;
           if (images.length < 2) {
-            $('enrollOut').textContent = `Hanya ${images.length} frame terekam — geser lebih lambat & tekan lebih rata, ulangi.`;
+            $('enrollOut').textContent =
+              `Hanya ${images.length} frame jelas dari ${cap.rawFrames} rekaman${qualityHint(cap)}. ` +
+              `Tekan rata, pusatkan inti sidik jari, ulangi di beberapa posisi.`;
             $('enrollBtn').disabled = false; return;
           }
-          $('enrollOut').textContent = `Menyimpan ${images.length} template…`;
+          $('enrollOut').textContent = `Menyimpan ${images.length} template (dari ${cap.rawFrames} frame)…`;
           const r = await fetch('/api/enroll', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ memberId, images }),
           }).then((x) => x.json());
-          $('enrollOut').textContent = JSON.stringify(r, null, 2);
+          $('enrollOut').textContent = JSON.stringify({ ...r, quality: cap.quality }, null, 2);
         } catch (e) { $('enrollOut').textContent = 'Gagal: ' + e.message; }
         $('enrollBtn').disabled = false; health();
       };
@@ -127,9 +135,10 @@
         if (!memberId) { $('verifyOut').textContent = 'Isi Member ID dulu.'; return; }
         $('verifyBtn').disabled = true; $('verdict').textContent = ''; $('verdict').className = 'verdict';
         try {
-          $('verifyOut').textContent = 'GESER jari untuk verifikasi…';
-          const images = await captureSwipe();
-          if (images.length === 0) throw new Error('tidak ada frame — geser jari di sensor');
+          $('verifyOut').textContent = 'Tekan rata & mantap untuk verifikasi (±5 detik)…';
+          const cap = await captureSwipe();
+          const images = cap.frames;
+          if (images.length === 0) throw new Error(`tidak ada frame jelas dari ${cap.rawFrames} rekaman — tekan lebih rata`);
           const r = await fetch('/api/verify', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ memberId, images }),

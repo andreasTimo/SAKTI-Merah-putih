@@ -89,7 +89,23 @@ dengan pasangan same-finger/different-press dan different-finger.
 > Akurasi same-finger/different-press BELUM diuji (butuh device + banyak capture).
 
 Citra parsial → utamakan verifikasi **1:1** setelah identitas dari e-KTP/kartu,
-dan gunakan **multi-template** (enroll beberapa "slide") untuk menaikkan akurasi.
+dan gunakan **multi-template** (enroll beberapa posisi) untuk menaikkan akurasi.
+
+### Teknik capture (dari guidebook device)
+
+Sensor = **area kapasitif kecil**, kapasitas **10 template**, FAR <0.001% / FRR <0.1%.
+Guidebook: *tekan rata & mantap, pusatkan inti sidik jari, **jangan digeser cepat**,
+ulangi beberapa kali di posisi berbeda.*
+
+Burst capture (`/capture-burst`) memilih frame berkualitas, bukan frame "bergerak":
+- **std ≥ `MIN_STD`** (default 18) → jari benar-benar menempel
+- **sharpness ≥ `MIN_SHARP`** (default 10) → bukan motion-blur (swipe cepat).
+  Kalibrasi: frame bagus ~17, blur ~6.6 (mean abs gradient |dx|+|dy|).
+- ambil sampai **`MAX_FRAMES`** (default 10) frame paling tajam, buang duplikat.
+
+Knob env di agent (tanpa rebuild): `BURST_MS`, `MIN_STD`, `MIN_SHARP`, `MAX_FRAMES`.
+Gejala lama: swipe pelan → 1 frame (dulu difilter by-gerakan); swipe cepat → banyak
+frame tapi blur → 0 minutiae. Sekarang dipilih by-ketajaman, bukan by-gerakan.
 
 ## Sumber
 

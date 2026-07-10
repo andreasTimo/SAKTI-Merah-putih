@@ -42,8 +42,11 @@ Embedding/Gemini ditolak untuk sekarang (lihat catatan Future).
 - [x] Parser PGM (P5) → `FingerprintImage` dpi 500 → `FingerprintTemplate`
 - [x] Unit test (JUnit): parse PGM, roundtrip template, integrasi real-print (gated `FP_SAMPLE`)
 - [x] App: proxy `/api/enroll`, `/api/verify`, `/api/capture-burst`; UI Enroll + Verifikasi 1:1
-- [x] **Swipe/burst capture** (`/capture-burst`): rekam banyak frame saat jari di-slide,
-      filter std + dedup gerakan → multi-template asli (bukan tap-tap). Verify juga burst.
+- [x] **Swipe/burst capture** (`/capture-burst`): rekam banyak frame, pilih yang
+      **tajam** (quality-first) — buang frame kosong & motion-blur. Verify juga burst.
+- [x] **Fix seleksi frame** (feedback user + guidebook): dulu filter by-gerakan →
+      swipe pelan cuma 1 frame, swipe cepat blur/0 minutiae. Sekarang gate std +
+      sharpness (kalibrasi: bagus ~17, blur ~6.6), knob env `MIN_STD/MIN_SHARP/MAX_FRAMES/BURST_MS`.
 - [x] `docker-compose`: service `matcher` + app `depends_on`
 - [x] **Kalibrasi DPI**: CS9711 68×118 butuh `SENSOR_DPI=150` (500 → 0 minutiae). Default di-set 150.
 - [x] Smoke test (capture asli): same→match 711.6 ✓, blank→tolak 0 ✓, restart→cache kosong ✓

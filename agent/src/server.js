@@ -6,10 +6,18 @@
 const http = require('http');
 const os = require('os');
 const device = require('./device');
-const { remap, toPGM, frameStats, selectDistinctFrames } = require('./image');
+const { remap, toPGM, frameStats, selectBestFrames } = require('./image');
 
 const PORT = Number(process.env.AGENT_PORT) || 7373;
 const HOST = process.env.AGENT_HOST || '127.0.0.1';
+
+// Burst quality thresholds — tune without a rebuild via env.
+const BURST = {
+  durationMs: Number(process.env.BURST_MS) || 5000,
+  minStd: Number(process.env.MIN_STD) || 18,
+  minSharp: Number(process.env.MIN_SHARP) || 10,
+  maxFrames: Number(process.env.MAX_FRAMES) || 10,
+};
 
 function send(res, code, body) {
   const data = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));
@@ -58,19 +66,24 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // Swipe/burst capture: collect frames while the finger slides, return only the
-  // distinct, finger-present views (filtered by std + inter-frame movement).
+  // Swipe/burst capture: collect frames while the finger presses/slides, then
+  // keep only the SHARP, finger-present ones (drops motion-blurred fast-swipe
+  // frames and empty frames). Firm flat press at a few positions = best result.
   if (req.method === 'POST' && req.url === '/capture-burst') {
     try {
-      const { raws } = await device.captureBurst({ durationMs: 4000, maxFrames: 24 });
+      const { raws } = await device.captureBurst({ durationMs: BURST.durationMs, maxFrames: 40 });
       const grays = raws.map(remap);
-      const distinct = selectDistinctFrames(grays, { minStd: 12, diffThreshold: 6 });
+      const best = selectBestFrames(grays, {
+        minStd: BURST.minStd,
+        minSharp: BURST.minSharp,
+        maxFrames: BURST.maxFrames,
+      });
       return send(res, 200, {
         ok: true,
         rawFrames: grays.length,
-        frames: distinct.map((g) => toPGM(g).toString('base64')),
-        stats: distinct.map(frameStats),
-        captured: distinct.length,
+        captured: best.length,
+        frames: best.map((b) => toPGM(b.g).toString('base64')),
+        quality: best.map((b) => ({ std: b.std, sharp: +b.sharp.toFixed(1) })),
       });
     } catch (e) {
       return send(res, 500, { ok: false, error: e.message });

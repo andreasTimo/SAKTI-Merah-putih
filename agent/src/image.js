@@ -38,7 +38,6 @@ function frameStats(gray) {
 }
 
 // Mean absolute pixel difference between two same-size grayscale frames.
-// Used to tell whether the finger actually moved between two burst frames.
 function meanAbsDiff(a, b) {
   const n = Math.min(a.length, b.length);
   if (n === 0) return 0;
@@ -47,20 +46,48 @@ function meanAbsDiff(a, b) {
   return sum / n;
 }
 
-// From a burst of raw grayscale frames, keep only the ones that (a) have real
-// ridge content (std >= minStd, i.e. a finger is present) and (b) differ enough
-// from the last kept frame (meanAbsDiff >= diffThreshold, i.e. the finger moved).
-// This turns a continuous swipe into a set of distinct, non-redundant views.
-function selectDistinctFrames(grays, { minStd = 12, diffThreshold = 6 } = {}) {
-  const kept = [];
-  let last = null;
+// Sharpness = mean absolute gradient (|dx| + |dy|). A crisp fingerprint has high
+// ridge-edge energy; a motion-blurred (fast-swipe) frame has low energy. On a
+// real CS9711 capture: good frame ~17, motion-blurred ~6.6.
+function sharpness(gray, w = IMG_WIDTH, h = IMG_HEIGHT) {
+  let sum = 0;
+  let count = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      if (x > 0) { sum += Math.abs(gray[idx] - gray[idx - 1]); count++; }
+      if (y > 0) { sum += Math.abs(gray[idx] - gray[idx - w]); count++; }
+    }
+  }
+  return count ? sum / count : 0;
+}
+
+// Pick the best frames from a burst. Per the device guidebook, the correct
+// technique is a firm, flat press (don't smear), repeated at a few positions —
+// so we want SHARP, finger-present frames, not merely "moved" ones:
+//   - std >= minStd     : a finger is actually on the sensor
+//   - sharpness >= minSharp : not motion-blurred
+//   - then keep the sharpest, dropping only near-identical duplicates
+//     (meanAbsDiff < nearDupThreshold), up to maxFrames.
+// Returns [{ g, std, sharp }] sorted best-first.
+function selectBestFrames(grays, opts = {}) {
+  const { minStd = 18, minSharp = 10, maxFrames = 10, nearDupThreshold = 2 } = opts;
+  const scored = [];
   for (const g of grays) {
-    if (frameStats(g).std < minStd) continue;
-    if (last && meanAbsDiff(g, last) < diffThreshold) continue;
-    kept.push(g);
-    last = g;
+    const std = frameStats(g).std;
+    if (std < minStd) continue;
+    const sharp = sharpness(g);
+    if (sharp < minSharp) continue;
+    scored.push({ g, std, sharp });
+  }
+  scored.sort((a, b) => b.sharp - a.sharp);
+  const kept = [];
+  for (const s of scored) {
+    if (kept.length >= maxFrames) break;
+    if (kept.some((k) => meanAbsDiff(k.g, s.g) < nearDupThreshold)) continue;
+    kept.push(s);
   }
   return kept;
 }
 
-module.exports = { remap, toPGM, frameStats, meanAbsDiff, selectDistinctFrames };
+module.exports = { remap, toPGM, frameStats, meanAbsDiff, sharpness, selectBestFrames };
