@@ -82,6 +82,12 @@ Hasil validasi hardware Windows tersedia di
 dijalankan satu kali dari terminal Administrator dan dibiarkan hidup selama
 web app digunakan.
 
+> **Repo terkait:** fitur sidik jari ini akan digabung sebagai satu Feature ke
+> repo utama koperasi (`sakti-merah-putih-main`, Next.js/Prisma). Dataset
+> hackathon 27-tabel yang menyertai proyek ini (dan sudah dimigrasi ke Cloud SQL
+> milik tim) didokumentasikan di
+> [`docs/HACKATHON_DATABASE_SCHEMA.md`](docs/HACKATHON_DATABASE_SCHEMA.md).
+
 ## Struktur
 
 | Path | Isi |
@@ -89,7 +95,7 @@ web app digunakan.
 | `agent/` | Bridge fingerprint native (Node + libusb). Capture + doctor + server. |
 | `app/` | Web app SAKTI (Docker). Tidak menyentuh USB; proxy ke agent. |
 | `scripts/` | Setup per-OS (`setup-mac.sh`, `setup-windows.ps1`, `setup-linux.sh`). |
-| `docs/` | Referensi protokol CS9711 & matriks lintas-OS. |
+| `docs/` | Referensi protokol CS9711, matriks lintas-OS, & skema database hackathon. |
 | `captures/` | Output gambar & laporan proof (git-ignored — data biometrik). |
 
 ## Matching CS9711
